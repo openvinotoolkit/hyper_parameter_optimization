@@ -1,0 +1,728 @@
+import math
+import hpopt
+import os
+import glob
+import json
+from statistics import median
+import time
+from enum import IntEnum
+import logging
+from typing import Optional, Union, List, Dict, Any
+
+import numpy as np
+import torch
+from torch.utils.data import random_split
+from torchvision import transforms
+
+from hpopt.dummy import DummyOpt
+from hpopt.smbo import BayesOpt
+from hpopt.asha import AsyncHyperBand
+
+logger = logging.getLogger(__name__)
+
+
+class search_space:
+    """
+    This implements search space used for SMBO and ASHA.
+    This class support uniform and quantized uniform with normal and log scale
+    in addition to categorical type. Quantized type has step which is unit for change.
+
+    Args:
+        type (str): type of hyper parameter in search space.
+                    supported types: uniform, loguniform, quniform, qloguniform, choice
+        range (list): range of hyper parameter search space.
+                      What value at each position means is as bellow.
+                      uniform: [lower space, upper space]
+                      quniform: [lower space, upper space, step]
+                      loguniform: [lower space, upper space, logarithm base]
+                      qloguniform: [lower space, upper space, step, logarithm base]
+                      categorical: [each categorical values, ...]
+    """
+    def __init__(self, type: str, range: List[Union[float, int]]):
+        self.type = type
+        self.range = range
+
+        if self.type == "uniform" or self.type == "loguniform":
+            if len(self.range) == 2:
+                range.append(2)
+            elif len(self.range) < 2:
+                raise ValueError(f'The range of the {self.type} type requires '
+                                 'two numbers for lower and upper limits. '
+                                 f'Your value is {self.range}')
+        elif self.type == "quniform" or self.type == "qloguniform":
+            if len(self.range) == 3:
+                range.append(2)
+            elif len(self.range) < 3:
+                raise ValueError(f'The range of the {self.type} type requires '
+                                 'three numbers for lower/upper limits and '
+                                 'quantization number. '
+                                 f'Your value is {self.range}')
+        elif self.type == "choice":
+            self.range = [0, len(range)]
+            self.choice_list = range
+        else:
+            raise TypeError(f'{self.type} is an unknown search space type.')
+
+    def lower_space(self):
+        if self.type == "loguniform":
+            return math.log(self.range[0], self.range[2])
+        elif self.type == "qloguniform":
+            return math.log(self.range[0], self.range[3])
+
+        return self.range[0]
+
+    def upper_space(self):
+        if self.type == "loguniform":
+            return math.log(self.range[1], self.range[2])
+        elif self.type == "qloguniform":
+            return math.log(self.range[1], self.range[3])
+
+        return self.range[1]
+
+    def space_to_real(self, number: Union[int, float]):
+        if self.type == "quniform":
+            return round(number / self.range[2]) * self.range[2]
+        elif self.type == "loguniform":
+            return self.range[2]**number
+        elif self.type == "qloguniform":
+            return round(self.range[3]**number / self.range[2]) * self.range[2]
+        elif self.type == "choice":
+            idx = int(number)
+            idx = min(idx, len(self.choice_list)-1)
+            idx = max(idx, 0)
+            return self.choice_list[idx]
+
+        return number
+
+    def real_to_space(self, number: Union[int, float]):
+        if self.type == "loguniform":
+            return math.log(number, self.range[2])
+        elif self.type == "qloguniform":
+            return math.log(number, self.range[3])
+
+        return number
+
+
+def createDummyOpt(search_alg=None,
+                   save_path=None,
+                   search_space=None,
+                   resume=False,
+                   **kwargs):
+    if save_path is None:
+        return None
+
+    return DummyOpt(save_path=save_path,
+                    search_space=search_space,
+                    resume=resume)
+
+
+def create(full_dataset_size: int,
+           num_full_iterations: int,
+           search_space: List[search_space],
+           save_path: str = 'hpo',
+           search_alg: str = 'bayes_opt',
+           early_stop: Optional[bool] = None,
+           mode: str = 'max',
+           num_init_trials: int = 5,
+           num_trials: Optional[int] = None,
+           max_iterations: Optional[int] = None,
+           min_iterations: Optional[int] = None,
+           reduction_factor: int = 2,
+           num_brackets: Optional[int] = None,
+           subset_ratio: Optional[Union[float, int]] = None,
+           batch_size_name: str = None,
+           image_resize: List[int] = [0, 0],
+           metric: str = 'mAP',
+           resume: bool = False,
+           expected_time_ratio: Union[int, float] = 4,
+           non_pure_train_ratio: float = 0.2,
+           num_workers: int = 1,
+           kappa: Union[float, int] = 2.576,
+           kappa_decay: Union[float, int] = 1,
+           kappa_decay_delay: int = 0):
+    """
+    Create a new hpopt instance.
+
+    Args:
+        full_dataset_size (int): train dataset size.
+        num_full_iterations (int): epoch for traninig after HPO.
+        save_path (str): path where result of HPO is saved.
+        search_alg (str): bayes_opt or asha.
+                          search algorithm to use for optimizing hyper parmaeters.
+                          Hpopt support SMBO and ASHA(HyperBand).
+        search_space (list): hyper parameter search space to find.
+        early_stop (bool): early stop flag.
+        mode (str): One of {min, max}. Determines whether objective is
+                    minimizing or maximizing the metric attribute.
+        num_init_trials (int): Only for SMBO. How many trials to use to init SMBO.
+        num_trials (int): How many training to conduct for HPO.
+        max_iterations (int): Max training epoch for each trial.
+        min_iterations (int): Only for ASHA. Only stop trials at least this old in time.
+        reduction_factor (int): Only for ASHA. Used to set halving rate and amount.
+                                This is simply a unit-less scalar.
+        num_brackets (int): Only for ASHA. Bracket number of ASHA(Hyperband).
+                            Each bracket has a different halving rate,
+                            specified by the reduction factor.
+        subset_ratio (float or int): ratio to how many train dataset to use for each trial.
+                                     The lower value is, the faster the speed is.
+                                     But If it's too low, HPO can be unstable.
+                                     Whatever value is, minimum dataset size is 500.
+        image_resize (list): Width and height of image used to resize for decreasing HPO time.
+                             First value of list is width and second value is height.
+        resume (bool): resume flag decide to use previous HPO results.
+                       If HPO completed, you can just use optimized hyper parameters.
+                       If HPO stopped in middle, you can resume in middle.
+        expected_time_ratio (int or float): Time to use for HPO.
+                                            If HPO is configured automatically,
+                                            HPO use time about exepected_time_ratio *
+                                            train time after HPO times.
+        non_pure_train_ratio (float): ratio of validation time to (train time + validation time)
+        num_workers (int): How many trains are executed in parallel.
+        kappa (float or int): Only for SMBO. Kappa vlaue for ucb used in bayesian optimization.
+        kappa_decay (float or int): Only for SMBO. Multiply kappa by kappa_decay every trials.
+        kappa_decay_delay (int): Only for SMBO. From first trials to kappa_decay_delay trials,
+                                 kappa isn't multiplied to kappa_decay.
+    """
+    os.makedirs(save_path, exist_ok=True)
+
+    if resume is False:
+        status_path = get_status_path(save_path)
+        if os.path.exists(status_path):
+            os.remove(status_path)
+        clear_trial_files(save_path)
+
+    if search_alg == 'bayes_opt':
+        return BayesOpt(save_path=save_path,
+                        search_space=search_space,
+                        early_stop=early_stop,
+                        mode=mode,
+                        num_init_trials=num_init_trials,
+                        num_trials=num_trials,
+                        max_iterations=max_iterations,
+                        subset_ratio=subset_ratio,
+                        batch_size_name=batch_size_name,
+                        image_resize=image_resize,
+                        metric=metric,
+                        resume=resume,
+                        expected_time_ratio=expected_time_ratio,
+                        num_full_iterations=num_full_iterations,
+                        full_dataset_size=full_dataset_size,
+                        non_pure_train_ratio=non_pure_train_ratio,
+                        num_workers=num_workers,
+                        kappa=kappa,
+                        kappa_decay=kappa_decay,
+                        kappa_decay_delay=kappa_decay_delay)
+    elif search_alg == 'asha':
+        return AsyncHyperBand(save_path=save_path,
+                              search_space=search_space,
+                              mode=mode,
+                              num_trials=num_trials,
+                              max_iterations=max_iterations,
+                              min_iterations=min_iterations,
+                              reduction_factor=reduction_factor,
+                              num_brackets=num_brackets,
+                              subset_ratio=subset_ratio,
+                              batch_size_name=batch_size_name,
+                              image_resize=image_resize,
+                              metric=metric,
+                              resume=resume,
+                              expected_time_ratio=expected_time_ratio,
+                              num_full_iterations=num_full_iterations,
+                              full_dataset_size=full_dataset_size,
+                              non_pure_train_ratio=non_pure_train_ratio,
+                              num_workers=num_workers)
+    else:
+        raise ValueError(f'Not supported search algorithm: {search_alg}')
+
+
+def get_status_path(save_path: str):
+    """
+    Return path of HPO status file
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+    """
+    return os.path.join(save_path, 'hpopt_status.json')
+
+
+def get_trial_path(save_path: str, trial_id: int):
+    """
+    Return path of HPO trial file
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+        tiral_id (int): order of HPO trial
+    """
+    return os.path.join(save_path, f'hpopt_trial_{trial_id}.json')
+
+
+def clear_trial_files(save_path: str):
+    """
+    clear HPO trial files
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+    """
+    trial_file_list = glob.glob(os.path.join(save_path, 'hpopt_trial_*.json'))
+
+    for trial_file_path in trial_file_list:
+        try:
+            os.remove(trial_file_path)
+        except OSError:
+            logger.error(f"Error while deleting file : {trial_file_path}")
+            return None
+
+
+# hpopt.Status.COMPLETERESULT - Previous HPO task is completely finished.
+#                              It means that the best hyper-parameters are already found.
+#
+# hpopt.Status.PARTIALRESULT - Previous HPO task is started but not finished yet.
+#
+# hpopt.Status.NORESULT - Previous HPO task is not found.
+#
+def get_previous_status(save_path: str):
+    """
+    Check if there is previous results.
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+    """
+    status_file_path = get_status_path(save_path)
+
+    if os.path.exists(status_file_path):
+        best_config_id = None
+        with open(status_file_path, 'rt') as json_file:
+            hpo_status = json.load(json_file)
+            best_config_id = hpo_status.get('best_config_id', None)
+
+        if best_config_id is not None:
+            return hpopt.Status.COMPLETERESULT
+        else:
+            return hpopt.Status.PARTIALRESULT
+    else:
+        return hpopt.Status.NORESULT
+
+
+def get_current_status(save_path: str, trial_id: int):
+    """
+    Return status of HPO trial.
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+        tiral_id (int): order of HPO trial.
+    """
+    trial_file_path = get_trial_path(save_path, trial_id)
+    trial_results = load_json(trial_file_path)
+
+    if trial_results is not None:
+        return trial_results['status']
+    else:
+        return hpopt.Status.UNKNOWN
+
+
+def get_best_score(save_path: str, trial_id: int, mode: str):
+    """
+    Return status of HPO trial.
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+        tiral_id (int): order of HPO trial.
+        mode (str): max or min. Decide whether to find max value or min value.
+    """
+    trial_file_path = get_trial_path(save_path, trial_id)
+    trial_results = load_json(trial_file_path)
+
+    if trial_results is not None:
+        if trial_results['status'] == Status.STOP:
+            if mode == 'min':
+                return min(trial_results['scores'])
+            else:
+                return max(trial_results['scores'])
+
+    return None
+
+
+def finalize_trial(config: Dict[str, Any]):
+    """
+    Handles the status of trials that have terminated by unexpected causes
+
+    Args:
+        config (dict): HPO configuration for a trial.
+                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
+                       and tiral information.
+    """
+    trial_results = load_json(config['file_path'])
+
+    if trial_results is not None:
+        if trial_results['status'] != Status.STOP:
+            trial_results['status'] = Status.STOP
+
+            # Check if the trial is terminated by the EarlyStoppingHook
+            scores_list = trial_results['scores']
+            if len(scores_list) > 5:
+                earlyStopped = True
+                for i in range(len(scores_list)-1, len(scores_list)-6, -1):
+                    if scores_list[i] > scores_list[i-1]:
+                        earlyStopped = False
+                        break
+
+                if earlyStopped:
+                    logger.debug("This trial is earlystopped")
+                    trial_results['early_stopped'] = 1
+
+            oldmask = os.umask(0o077)
+            with open(config['file_path'], 'wt') as json_file:
+                json.dump(trial_results, json_file, indent=4)
+                json_file.flush()
+            os.umask(oldmask)
+
+
+def get_median_score(save_path: str, trial_id: int, curr_iteration: int):
+    """
+    Return median score at curr_iteration epoch from previous trials
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+        tiral_id (int): order of HPO trial
+        curr_iteration (int): which epoch to get score at from previous trials
+    """
+    median_score_list = []
+
+    files = os.listdir(save_path)
+    for f in files:
+        if f.startswith('hpopt_trial') is False:
+            continue
+
+        if f != f'hpopt_trial_{trial_id}.json':
+            trial_file_path = os.path.join(save_path, f)
+            try:
+                with open(trial_file_path, 'rt') as json_file:
+                    trial_results = json.load(json_file)
+
+                    if len(trial_results['median']) >= curr_iteration:
+                        median_score_list.append(trial_results['median'][curr_iteration-1])
+            except FileNotFoundError:
+                continue
+
+    if len(median_score_list) == 0:
+        return None
+    else:
+        return median(median_score_list)
+
+
+def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
+    """
+    Calculate a cutoff score for a specified rung of ASHA
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+        target_rung (int): current rung number
+        _rung_list (list): list of rungs in the current bracket
+        mode (str): max or min. Decide whether to find max value or min value.
+    """
+    hpo_status = load_json(get_status_path(save_path))
+
+    if hpo_status is None:
+        return None
+
+    # Gather all scores
+    hpo_trial_results = []
+
+    for idx, config in enumerate(hpo_status['config_list']):
+        if config['status'] in [hpopt.Status.RUNNING, hpopt.Status.STOP]:
+            trial_file_path = hpopt.get_trial_path(save_path, idx)
+            trial_results = load_json(trial_file_path)
+
+            if trial_results is not None:
+                hpo_trial_results.append(trial_results['scores'])
+
+    # Run a SHA (not ASHA)
+    rung_score_list = []
+    rung_list = _rung_list.copy()
+    rung_list.sort(reverse=False)
+
+    if len(hpo_trial_results) > 1:
+        rf = hpo_status['reduction_factor']
+
+        for curr_rung in rung_list:
+            if curr_rung <= target_rung:
+                rung_score_list.clear()
+
+                for trial_result in hpo_trial_results:
+                    if len(trial_result) >= curr_rung:
+                        if mode == 'max':
+                            rung_score_list.append(max(trial_result[:curr_rung]))
+                        else:
+                            rung_score_list.append(min(trial_result[:curr_rung]))
+                    else:
+                        trial_result.clear()
+
+                if len(rung_score_list) > 1:
+                    if mode == 'max':
+                        cutt_off_score = np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
+                    else:
+                        cutt_off_score = np.nanpercentile(rung_score_list, (1 / rf) * 100)
+
+                    for trial_result in hpo_trial_results:
+                        if len(trial_result) >= curr_rung:
+                            if mode == 'max':
+                                if max(trial_result[:curr_rung]) < cutt_off_score:
+                                    trial_result.clear()
+                            else:
+                                if min(trial_result[:curr_rung]) > cutt_off_score:
+                                    trial_result.clear()
+                else:
+                    break
+            else:
+                break
+
+    if len(rung_score_list) > 1:
+        rf = hpo_status['reduction_factor']
+
+        if mode == 'max':
+            return np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
+        else:
+            return np.nanpercentile(rung_score_list, (1 / rf) * 100)
+
+    return None
+
+
+def report(config: Dict[str, Any], score: float):
+    """
+    report score to Hpopt.
+
+    Args:
+        config (dict): HPO configuration for a trial.
+                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
+                       and tiral information.
+        score (float): score of every epoch during trial.
+    """
+    if os.path.exists(config['file_path']):
+        with open(config['file_path'], 'rt') as json_file:
+            trial_results = json.load(json_file)
+    else:
+        trial_results = {}
+        trial_results['status'] = Status.RUNNING
+        trial_results['scores'] = []
+        trial_results['median'] = []
+
+    trial_results['scores'].append(score)
+    trial_results['median'].append(
+        sum(trial_results['scores'])/len(trial_results['scores']))
+
+    # Update the current status ASAP in the file system.
+    oldmask = os.umask(0o077)
+    with open(config['file_path'], 'wt') as json_file:
+        json.dump(trial_results, json_file, indent=4)
+        json_file.flush()
+    os.umask(oldmask)
+
+    if len(trial_results['scores']) >= config["iterations"]:
+        trial_results['status'] = Status.STOP
+    elif 'early_stop' in config and config['early_stop'] == "median_stop":
+        save_path = os.path.dirname(config['file_path'])
+
+        median_score = get_median_score(save_path,
+                                        config['trial_id'],
+                                        len(trial_results['scores']))
+
+        if median_score is not None:
+            if config['mode'] == 'min':
+                curr_best_score = min(trial_results['scores'])
+            else:
+                curr_best_score = max(trial_results['scores'])
+
+            stop_flag = False
+
+            if config['mode'] == 'max' and median_score > curr_best_score:
+                stop_flag = True
+            elif config['mode'] == 'min' and median_score < curr_best_score:
+                stop_flag = True
+
+            if stop_flag:
+                trial_results['status'] = Status.STOP
+                logger.debug(f"median stop is executed. median score : {median_score} / "
+                             f"current best score : {curr_best_score}")
+    elif 'rungs' in config:
+        # Async HyperBand
+        save_path = os.path.dirname(config['file_path'])
+        curr_itr = len(trial_results['scores'])
+
+        for rung_itr in config['rungs']:
+            if curr_itr >= rung_itr:
+                # Decide whether to promote to the next rung or not
+                cutoff_score = get_cutoff_score(save_path, rung_itr, config['rungs'], config['mode'])
+
+                if cutoff_score is not None:
+                    if config['mode'] == 'min':
+                        curr_best_score = min(trial_results['scores'][:rung_itr])
+                    else:
+                        curr_best_score = max(trial_results['scores'][:rung_itr])
+
+                    stop_flag = False
+
+                    if config['mode'] == 'max' and cutoff_score > curr_best_score:
+                        stop_flag = True
+                    elif config['mode'] == 'min' and cutoff_score < curr_best_score:
+                        stop_flag = True
+
+                    if stop_flag:
+                        trial_results['status'] = Status.STOP
+                        logger.info(f"[ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
+                                    f"{cutoff_score} > {curr_best_score}")
+
+    oldmask = os.umask(0o077)
+    with open(config['file_path'], 'wt') as json_file:
+        json.dump(trial_results, json_file, indent=4)
+        json_file.flush()
+    os.umask(oldmask)
+
+    # Wait for flushing updated contents to the file system
+    if trial_results['status'] == Status.STOP:
+        time.sleep(1)
+
+    return trial_results['status']
+
+
+def reportOOM(config):
+    """
+    report if trial raise out of cuda memory.
+
+    Args:
+        config (dict): HPO configuration for a trial.
+                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
+                       and tiral information.
+    """
+    trial_results = {}
+    trial_results['status'] = Status.CUDAOOM
+    trial_results['scores'] = []
+    trial_results['median'] = []
+
+    oldmask = os.umask(0o077)
+    with open(config['file_path'], 'wt') as json_file:
+        json.dump(trial_results, json_file, indent=4)
+        json_file.flush()
+    os.umask(oldmask)
+
+    time.sleep(1)
+
+
+def load_json(json_file_path: str):
+    """
+    load json file.
+
+    Args:
+        json_file_path (str): path where json file is saved.
+    """
+    if os.path.exists(json_file_path) is False:
+        return None
+
+    retry_flag = True
+    contents = None
+    while retry_flag:
+        try:
+            with open(json_file_path, 'rt') as json_file:
+                contents = json.load(json_file)
+            retry_flag = False
+        except OSError as err:
+            logger.error(f"Error while reading file : {json_file_path}")
+            logger.error(f"OS error: {err}")
+            return None
+        except json.JSONDecodeError:
+            time.sleep(0.1)
+
+    return contents
+
+
+class Status(IntEnum):
+    UNKNOWN = -1
+    READY = 0
+    RUNNING = 1
+    STOP = 2
+    CUDAOOM = 3
+    NORESULT = 4
+    PARTIALRESULT = 5
+    COMPLETERESULT = 6
+
+
+class HpoDataset:
+    '''
+    Dataset class which wrap dataset class used in training for sub-sampling.
+
+    Args:
+        fullset: dataset instance used in train.
+        config (dict): HPO configuration for a trial.
+                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
+                       and tiral information.
+    '''
+    def __init__(self, fullset, config: Dict[str, Any]):
+        self.__dict__ = fullset.__dict__.copy()
+        self.fullset = fullset
+
+        if config["subset_ratio"] > 0.0:
+            if config["subset_ratio"] < 1.0:
+                subset_size = int(len(fullset) * config["subset_ratio"])
+                self.subset, _ = random_split(fullset, [subset_size, (len(fullset) - subset_size)],
+                                              generator=torch.Generator().manual_seed(42))
+
+                # check if fullset is an inheritance of mmdet.datasets
+                if hasattr(self, 'flag'):
+                    self._update_group_flag()
+            else:
+                self.subset = fullset
+            self.length = len(self.subset)
+        else:
+            self.subset = fullset
+            self.length = len(fullset)
+
+        if config["resize_height"] > 0 and config["resize_width"] > 0:
+            self.transform = transforms.Resize((config["resize_height"],
+                                                config["resize_width"]), interpolation=2)
+        else:
+            self.transform = None
+
+    def _update_group_flag(self):
+        self.flag = np.zeros(len(self.subset), dtype=np.uint8)
+
+        update_flag = False
+        if 'img_metas' in self.subset[0]:
+            if 'ori_shape' in self.subset[0]['img_metas'].data:
+                update_flag = True
+
+        if not update_flag:
+            return
+
+        for i in range(len(self.subset)):
+            self.flag[i] = self.fullset.flag[self.subset.indices[i]]
+
+    def __getitem__(self, index: int):
+        data = self.subset[index]
+        if self.transform:
+            if type(data) is tuple and len(data) == 2 and \
+               type(data[0]) == torch.Tensor:
+                data = (self.transform(data[0]), data[1])
+            elif type(data) is dict and 'img' in data:
+                data['img'] = self.transform(data['img'])
+        return data
+
+    def __len__(self):
+        return self.length
+
+    def __getattr__(self, item: str):
+        if isinstance(item, str) and (item == "__setstate__" or item == "__getstate__"):
+            raise AttributeError(item)
+
+        return getattr(self.fullset, item)
+
+
+def createHpoDataset(fullset, config: Dict[str, Any]):
+    """
+    wrap original dataset by HpoDataset using hpo_config returend by Hpopt.
+
+    Args:
+        fullset: dataset instance used in train.
+        config (dict): HPO configuration for a trial.
+                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
+                       and tiral information.
+    """
+    return HpoDataset(fullset, config)
