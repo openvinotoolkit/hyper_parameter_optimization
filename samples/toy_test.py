@@ -1,3 +1,7 @@
+# Copyright (C) 2018-2021 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+
 #
 # Toy test example with skopt.benchmarks.branin
 # https://scikit-optimize.github.io/stable/modules/generated/skopt.benchmarks.branin.html
