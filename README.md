@@ -25,12 +25,12 @@ Python library of automatic hyper-parameter optimization
 - Sample codes
   - List of sample codes
     - Sequential Execution
-      - [toy_test.py](../samples/toy_test.py) 
-      - [pytorch_test.py](../samples/pytorch_test.py)
+      - [toy_test.py](./samples/toy_test.py) 
+      - [pytorch_test.py](./samples/pytorch_test.py)
 
     - Parallel Execution
-      - [toy_test_parallel.py](../samples/toy_test_parallel.py)
-      - [pytorch_parallel_test.py](../samples/pytorch_parallel_test.py)
+      - [toy_test_parallel.py](./samples/toy_test_parallel.py)
+      - [pytorch_parallel_test.py](./samples/pytorch_parallel_test.py)
 
   - How to run sample codes
       - Basic code to find an optimal point of [skopt.benchmarks.branin](https://scikit-optimize.github.io/stable/modules/generated/skopt.benchmarks.branin.html)
@@ -52,5 +52,5 @@ Python library of automatic hyper-parameter optimization
 - max_iterations: [number of maximum iterations/epochs for each trial]
 - subset_ratio: [ratio of items in datasets for HPO training task]
 - image_resize: [width and height of images in datasets for HPO training task]
--->
 ## [[API References]](./docs/apis.md#api)
+-->
