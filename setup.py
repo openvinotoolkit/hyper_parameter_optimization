@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='hpopt',
-    version='0.0.1',
+    version='0.1.0',
     url='https://github.com/openvinotoolkit/hyper_parameter_optimization',
     packages=find_packages(),
     description='Hyper-parameters Optimization',
