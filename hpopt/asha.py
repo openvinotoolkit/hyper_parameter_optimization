@@ -573,3 +573,7 @@ class AsyncHyperBand(HpOpt):
             num_total_epochs += (remained_trials * max_epochs)
 
         return num_total_epochs
+
+    def get_progress(self):
+        return min(self.get_num_executed_epochs() 
+                   / self.expected_total_epochs, 99.9)

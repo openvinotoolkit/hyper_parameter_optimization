@@ -449,3 +449,14 @@ class BayesOpt(HpOpt):
                 new_configs.append(new_config)
 
         return new_configs
+
+    def get_progress(self):
+        finished_trials = sum([val['status'] == hpopt.Status.STOP]
+                               for val in self.hpo_status['config_list'])
+        progress = finished_trials / self.num_trials
+
+        with open(hpopt.get_trial_path(self.save_path, finished_trials), 'r') as f:
+            progress += (len(json.load(f)['scores'])
+                         / (self.num_trials * self.num_full_iterations))
+        
+        return min(progress, 99.9)
