@@ -459,6 +459,6 @@ class BayesOpt(HpOpt):
         if os.path.exists(final_trial_path):
             with open(final_trial_path, 'r') as f:
                 progress += (len(json.load(f)['scores'])
-                            / (self.num_trials * self.num_full_iterations))
+                            / (self.num_trials * self.max_iterations))
         
-        return min(progress, 99.9)
+        return min(progress, 0.99)
