@@ -341,10 +341,10 @@ class BayesOpt(HpOpt):
         trial_ratio = num_trials / max_trials
 
         while current_time_ratio < expected_time_ratio:
-            if subset_ratio < 1.0 and subset_ratio <= (5 * iter_ratio) and subset_ratio < trial_ratio:
+            if subset_ratio < 1.0 and subset_ratio <= (3 * iter_ratio) and subset_ratio < trial_ratio:
                 subset_ratio = subset_ratio * 1.05
                 subset_ratio = min(1.0, subset_ratio)
-            elif iter_ratio < 1.0 and (5 * iter_ratio) <= subset_ratio and (5 * iter_ratio) < trial_ratio:
+            elif iter_ratio < 1.0 and (3 * iter_ratio) <= subset_ratio and (3 * iter_ratio) < trial_ratio:
                 max_iterations += 1
                 max_iterations = min(max_iterations, num_full_iterations)
             else:
