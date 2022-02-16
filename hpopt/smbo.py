@@ -341,10 +341,10 @@ class BayesOpt(HpOpt):
         trial_ratio = num_trials / max_trials
 
         while current_time_ratio < expected_time_ratio:
-            if subset_ratio < 1.0 and subset_ratio <= (5 * iter_ratio) and subset_ratio < trial_ratio:
+            if subset_ratio < 1.0 and subset_ratio <= (3 * iter_ratio) and subset_ratio < trial_ratio:
                 subset_ratio = subset_ratio * 1.05
                 subset_ratio = min(1.0, subset_ratio)
-            elif iter_ratio < 1.0 and (5 * iter_ratio) <= subset_ratio and (5 * iter_ratio) < trial_ratio:
+            elif iter_ratio < 1.0 and (3 * iter_ratio) <= subset_ratio and (3 * iter_ratio) < trial_ratio:
                 max_iterations += 1
                 max_iterations = min(max_iterations, num_full_iterations)
             else:
@@ -449,3 +449,19 @@ class BayesOpt(HpOpt):
                 new_configs.append(new_config)
 
         return new_configs
+
+    def get_progress(self):
+        finished_trials = sum([val['status'] == hpopt.Status.STOP
+                               for val in self.hpo_status['config_list']])
+        progress = finished_trials / self.num_trials
+
+        final_trial_path = hpopt.get_trial_path(self.save_path, finished_trials)
+        if os.path.exists(final_trial_path):
+            with open(final_trial_path, 'r') as f:
+                try:
+                    progress += (len(json.load(f)['scores'])
+                                / (self.num_trials * self.max_iterations))
+                except json.JSONDecodeError:
+                    pass
+        
+        return min(progress, 0.99)

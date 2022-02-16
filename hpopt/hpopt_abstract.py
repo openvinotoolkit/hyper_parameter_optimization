@@ -278,3 +278,6 @@ class HpOpt:
         self.save_results()
 
         return self.hpo_status['config_list'][best_trial_id]['config']
+
+    def get_progress(self):
+        pass
