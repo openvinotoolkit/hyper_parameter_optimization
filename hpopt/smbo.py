@@ -138,6 +138,16 @@ class BayesOpt(HpOpt):
                 if os.path.exists(trial_file_path):
                     os.remove(trial_file_path)
 
+        self.hpo_status['config_list'].append({
+            "trial_id" : 0,
+            "config" : {
+                    "learning_parameters.learning_rate" : 0.008,
+                    "learning_parameters.batch_size" : 8,
+                },
+            "status" : hpopt.Status.READY,
+            "score" : None,
+        })
+
         num_ready_configs = len(self.hpo_status['config_list'])
 
         for i in range(num_ready_configs, self.num_init_trials):
