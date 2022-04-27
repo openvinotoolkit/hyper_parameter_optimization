@@ -33,7 +33,7 @@ class BayesOpt(HpOpt):
                  kappa: Union[float, int] = 2.576,
                  kappa_decay: int = 1,
                  kappa_decay_delay: int = 0,
-                 default_hyper_parameters: Dict = None,
+                 default_hyper_parameters: Optional[Dict] = None,
                  **kwargs):
         super(BayesOpt, self).__init__(**kwargs)
 

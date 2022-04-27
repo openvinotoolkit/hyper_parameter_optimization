@@ -6,7 +6,7 @@ import json
 import os
 from math import ceil, log
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
@@ -39,7 +39,7 @@ class AsyncHyperBand(HpOpt):
                  num_brackets: Optional[int] = None,
                  min_iterations: Optional[int] = None,
                  reduction_factor: int = 2,
-                 default_hyper_parameters=None,
+                 default_hyper_parameters: Optional[Dict] = None,
                  **kwargs):
         super(AsyncHyperBand, self).__init__(**kwargs)
 
