@@ -144,7 +144,7 @@ def create(full_dataset_size: int,
            kappa: Union[float, int] = 2.576,
            kappa_decay: Union[float, int] = 1,
            kappa_decay_delay: int = 0,
-           default_hyper_parameters : Optional[Dict] = None):
+           default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None):
     """
     Create a new hpopt instance.
 
