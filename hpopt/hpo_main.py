@@ -526,6 +526,7 @@ def report(config: Dict[str, Any], score: float):
 
     if len(trial_results['scores']) >= config["iterations"]:
         trial_results['status'] = Status.STOP
+        print(f"[HPO-DEBUG] hpopt.report() stopped by reaching max iterations")
     elif 'early_stop' in config and config['early_stop'] == "median_stop":
         save_path = os.path.dirname(config['file_path'])
 
@@ -550,6 +551,8 @@ def report(config: Dict[str, Any], score: float):
                 trial_results['status'] = Status.STOP
                 logger.debug(f"median stop is executed. median score : {median_score} / "
                              f"current best score : {curr_best_score}")
+                print(f"[HPO-DEBUG] hpopt.report() median stop is executed. median score : {median_score} / "
+                      f"current best score : {curr_best_score}")
     elif 'rungs' in config:
         # Async HyperBand
         save_path = os.path.dirname(config['file_path'])
@@ -577,6 +580,8 @@ def report(config: Dict[str, Any], score: float):
                         trial_results['status'] = Status.STOP
                         logger.info(f"[ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
                                     f"{cutoff_score} > {curr_best_score}")
+                        print(f"[HPO-DEBUG] hpopt.report() [ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
+                              f"{cutoff_score} > {curr_best_score}")
 
     oldmask = os.umask(0o077)
     with open(config['file_path'], 'wt') as json_file:
@@ -733,3 +738,7 @@ def createHpoDataset(fullset, config: Dict[str, Any]):
                        and tiral information.
     """
     return HpoDataset(fullset, config)
+
+
+def hyperband_generate_rungs(min_t, max_t, rf=2, s=0):
+    return AsyncHyperBand.get_rungs(min_t, max_t, rf, s)

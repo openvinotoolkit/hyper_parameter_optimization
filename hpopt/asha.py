@@ -83,7 +83,7 @@ class AsyncHyperBand(HpOpt):
                                    parallelism=self.num_workers,
                                    min_epochs=self.min_iterations,
                                    max_epochs=self.max_iterations)
-            logger.debug(f"auto-config: num_trials : {self.num_trials} min_iterations : {self.min_iterations} "
+            print(f"[HPO-DEBUG] auto-config: num_trials : {self.num_trials} min_iterations : {self.min_iterations} "
                          f"max_iterations : {self.max_iterations} subset_ratio {self.subset_ratio} "
                          f"expected_total_epochs : {self.expected_total_epochs} num_brackets: {self.num_brackets}")
         else:
@@ -257,7 +257,8 @@ class AsyncHyperBand(HpOpt):
         self.save_results()
 
     # Get the list of iteration numbers for rungs in the bracket
-    def get_rungs(self, min_t: int, max_t: int, rf: int, s: int):
+    @staticmethod
+    def get_rungs(min_t: int, max_t: int, rf: int, s: int):
         MAX_RUNGS = int(log(max_t - min_t + 1) / log(rf) - s + 1)
         rungs = [(min_t - 1) + rf**(k + s) for k in reversed(range(MAX_RUNGS))]
 
@@ -280,7 +281,7 @@ class AsyncHyperBand(HpOpt):
             json_file.close()
         os.umask(oldmask)
 
-    def get_next_sample(self):
+    def get_next_sample(self, min_iters=None, max_iters=None):
         # Gather all results from workers
         self.update_scores()
 
@@ -291,7 +292,8 @@ class AsyncHyperBand(HpOpt):
         # Check total number of executed epochs
         if self.expected_total_epochs > 0:
             num_executed_epochs = self.get_num_executed_epochs()
-            logger.debug(f"self.expected_total_epochs {self.expected_total_epochs} "
+            # logger.debug(f"self.expected_total_epochs {self.expected_total_epochs} "
+            print(f"[HPO-DEBUG] self.expected_total_epochs {self.expected_total_epochs} "
                          f"num_executed_epochs {num_executed_epochs}")
             if num_executed_epochs >= self.expected_total_epochs:
                 return None
@@ -323,7 +325,13 @@ class AsyncHyperBand(HpOpt):
         new_config['resize_width'] = self.image_resize[0]
         new_config['resize_height'] = self.image_resize[1]
         new_config['mode'] = self.mode
-
+        new_config['min_iterations'] = self.min_iterations
+        if min_iters is not None and max_iters is not None:
+            print(f'[HPO-DEBUG] adjust rungs with given min/max iterations')
+            print(f"[HPO-DEBUG] (before) {new_config['rungs']}")
+            new_config['rungs'] = self.get_rungs(min_iters, max_iters, 2, 0)
+            print(f"[HPO-DEBUG] (after) {new_config['rungs']}")
+        print(f'[HPO-DEBUG] get_next_sample() new_config = {new_config}')
         return new_config
 
     def update_scores(self):
@@ -523,7 +531,8 @@ class AsyncHyperBand(HpOpt):
                         if len(scores) > max_epochs_in_trials:
                             max_epochs_in_trials = len(scores)
 
-            logger.debug(f"(before) max_epochs_in_trials: {max_epochs_in_trials}")
+            # logger.debug(f"(before) max_epochs_in_trials: {max_epochs_in_trials}")
+            print(f"[HPO-DEBUG] (before) max_epochs_in_trials: {max_epochs_in_trials}")
 
             if max_epochs_in_trials > 0:
                 rungs = self.get_rungs(min_epochs, num_full_epochs, reduction_factor, 0)
@@ -539,7 +548,8 @@ class AsyncHyperBand(HpOpt):
                     if rung > max_epochs_in_trials:
                         new_max_epochs = rung
                         break
-            logger.debug(f"(after) new_max_epochs: {new_max_epochs}")
+            # logger.debug(f"(after) new_max_epochs: {new_max_epochs}")
+            print(f"[HPO-DEBUG] (after) new_max_epochs: {new_max_epochs}")
 
             num_full_epochs = new_max_epochs
 
@@ -568,7 +578,7 @@ class AsyncHyperBand(HpOpt):
         num_total_epochs = 0
 
         num_trials_in_brackets = self.get_num_trials_in_brackets(reduction_factor, num_brackets)
-
+        # print(f'[HPO-DEBUG] num_trials_in_brackets = {num_trials_in_brackets}')
         brackets_total = sum(num_trials_in_brackets)
         brackets_ratio = [float(b / brackets_total) for b in num_trials_in_brackets]
 
