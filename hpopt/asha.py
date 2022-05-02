@@ -6,7 +6,7 @@ import json
 import os
 from math import ceil, log
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
@@ -39,6 +39,7 @@ class AsyncHyperBand(HpOpt):
                  num_brackets: Optional[int] = None,
                  min_iterations: Optional[int] = None,
                  reduction_factor: int = 2,
+                 default_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
                  **kwargs):
         super(AsyncHyperBand, self).__init__(**kwargs)
 
@@ -197,6 +198,19 @@ class AsyncHyperBand(HpOpt):
         # according to the ratio of the relative number of trials in each bracket
         brackets_total = sum(n0_in_brackets)
         brackets_ratio = [float(b / brackets_total) for b in n0_in_brackets]
+
+        if default_hyper_parameters is not None:
+            if isinstance(default_hyper_parameters, dict):
+                default_hyper_parameters = [default_hyper_parameters]
+
+            for idx, default_hyper_parameter in enumerate(default_hyper_parameters):
+                self.hpo_status['config_list'].append({
+                    "trial_id" : idx,
+                    "config" : default_hyper_parameter,
+                    "status" : hpopt.Status.READY,
+                    "score" : None,
+                    'bracket': 0,
+                })
 
         num_ready_configs = len(self.hpo_status['config_list'])
 

@@ -143,7 +143,8 @@ def create(full_dataset_size: int,
            num_workers: int = 1,
            kappa: Union[float, int] = 2.576,
            kappa_decay: Union[float, int] = 1,
-           kappa_decay_delay: int = 0):
+           kappa_decay_delay: int = 0,
+           default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None):
     """
     Create a new hpopt instance.
 
@@ -215,7 +216,8 @@ def create(full_dataset_size: int,
                         num_workers=num_workers,
                         kappa=kappa,
                         kappa_decay=kappa_decay,
-                        kappa_decay_delay=kappa_decay_delay)
+                        kappa_decay_delay=kappa_decay_delay,
+                        default_hyper_parameters=default_hyper_parameters)
     elif search_alg == 'asha':
         return AsyncHyperBand(save_path=save_path,
                               search_space=search_space,
@@ -234,7 +236,8 @@ def create(full_dataset_size: int,
                               num_full_iterations=num_full_iterations,
                               full_dataset_size=full_dataset_size,
                               non_pure_train_ratio=non_pure_train_ratio,
-                              num_workers=num_workers)
+                              num_workers=num_workers,
+                              default_hyper_parameters=default_hyper_parameters)
     else:
         raise ValueError(f'Not supported search algorithm: {search_alg}')
 

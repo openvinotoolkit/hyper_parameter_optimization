@@ -5,7 +5,7 @@
 import json
 import os
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, Dict, List
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
@@ -33,6 +33,7 @@ class BayesOpt(HpOpt):
                  kappa: Union[float, int] = 2.576,
                  kappa_decay: int = 1,
                  kappa_decay_delay: int = 0,
+                 default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None,
                  **kwargs):
         super(BayesOpt, self).__init__(**kwargs)
 
@@ -137,6 +138,18 @@ class BayesOpt(HpOpt):
                 trial_file_path = hpopt.get_trial_path(self.save_path, idx)
                 if os.path.exists(trial_file_path):
                     os.remove(trial_file_path)
+
+        if default_hyper_parameters is not None:
+            if isinstance(default_hyper_parameters, dict):
+                default_hyper_parameters = [default_hyper_parameters]
+
+            for idx, default_hyper_parameter in enumerate(default_hyper_parameters):
+                self.hpo_status['config_list'].append({
+                    "trial_id" : idx,
+                    "config" : default_hyper_parameter,
+                    "status" : hpopt.Status.READY,
+                    "score" : None,
+                })
 
         num_ready_configs = len(self.hpo_status['config_list'])
 
