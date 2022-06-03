@@ -2,30 +2,31 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-import math
-import hpopt
-import os
 import glob
 import json
-from statistics import median
+import logging
+import math
+import os
 import time
 from enum import IntEnum
-import logging
-from typing import Optional, Union, List, Dict, Any
+from statistics import median
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
 from torch.utils.data import random_split
 from torchvision import transforms
 
+import hpopt
+# from hpopt.asha import AsyncHyperBand
+from hpopt.hyperband import AsyncHyperBandWithIters
 from hpopt.dummy import DummyOpt
 from hpopt.smbo import BayesOpt
-from hpopt.asha import AsyncHyperBand
 
 logger = logging.getLogger(__name__)
 
 
-class search_space:
+class SearchSpace:
     """
     This implements search space used for SMBO and ASHA.
     This class support uniform and quantized uniform with normal and log scale
@@ -122,7 +123,7 @@ def createDummyOpt(search_alg=None,
 
 def create(full_dataset_size: int,
            num_full_iterations: int,
-           search_space: List[search_space],
+           search_space: List[SearchSpace],
            save_path: str = 'hpo',
            search_alg: str = 'bayes_opt',
            early_stop: Optional[bool] = None,
@@ -189,7 +190,7 @@ def create(full_dataset_size: int,
                                  kappa isn't multiplied to kappa_decay.
     """
     os.makedirs(save_path, exist_ok=True)
-
+    print("[DEBUG-HPO] create()")
     if resume is False:
         status_path = get_status_path(save_path)
         if os.path.exists(status_path):
@@ -219,25 +220,46 @@ def create(full_dataset_size: int,
                         kappa_decay_delay=kappa_decay_delay,
                         default_hyper_parameters=default_hyper_parameters)
     elif search_alg == 'asha':
-        return AsyncHyperBand(save_path=save_path,
-                              search_space=search_space,
-                              mode=mode,
-                              num_trials=num_trials,
-                              max_iterations=max_iterations,
-                              min_iterations=min_iterations,
-                              reduction_factor=reduction_factor,
-                              num_brackets=num_brackets,
-                              subset_ratio=subset_ratio,
-                              batch_size_name=batch_size_name,
-                              image_resize=image_resize,
-                              metric=metric,
-                              resume=resume,
-                              expected_time_ratio=expected_time_ratio,
-                              num_full_iterations=num_full_iterations,
-                              full_dataset_size=full_dataset_size,
-                              non_pure_train_ratio=non_pure_train_ratio,
-                              num_workers=num_workers,
-                              default_hyper_parameters=default_hyper_parameters)
+        # return AsyncHyperBand(save_path=save_path,
+        #                       search_space=search_space,
+        #                       mode=mode,
+        #                       num_trials=num_trials,
+        #                       max_iterations=max_iterations,
+        #                       min_iterations=min_iterations,
+        #                       reduction_factor=reduction_factor,
+        #                       num_brackets=num_brackets,
+        #                       subset_ratio=subset_ratio,
+        #                       batch_size_name=batch_size_name,
+        #                       image_resize=image_resize,
+        #                       metric=metric,
+        #                       resume=resume,
+        #                       expected_time_ratio=expected_time_ratio,
+        #                       num_full_iterations=num_full_iterations,
+        #                       full_dataset_size=full_dataset_size,
+        #                       non_pure_train_ratio=non_pure_train_ratio,
+        #                       num_workers=num_workers,
+        #                       default_hyper_parameters=default_hyper_parameters)
+        return AsyncHyperBandWithIters(
+            save_path=save_path,
+            search_space=search_space,
+            mode=mode,
+            num_trials=num_trials,
+            max_iterations=max_iterations,
+            min_iterations=min_iterations,
+            reduction_factor=reduction_factor,
+            num_brackets=num_brackets,
+            subset_ratio=subset_ratio,
+            batch_size_name=batch_size_name,
+            image_resize=image_resize,
+            metric=metric,
+            resume=resume,
+            expected_time_ratio=expected_time_ratio,
+            num_full_iterations=num_full_iterations,
+            full_dataset_size=full_dataset_size,
+            non_pure_train_ratio=non_pure_train_ratio,
+            num_workers=num_workers,
+            default_hyper_parameters=default_hyper_parameters
+        )
     else:
         raise ValueError(f'Not supported search algorithm: {search_alg}')
 
@@ -494,7 +516,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
     return None
 
 
-def report(config: Dict[str, Any], score: float):
+def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = -1):
     """
     report score to Hpopt.
 
@@ -503,7 +525,9 @@ def report(config: Dict[str, Any], score: float):
                        This include train confiuration(e.g. hyper parameter, epoch, etc.)
                        and tiral information.
         score (float): score of every epoch during trial.
+        current_iters (int): current iteration number when the given score was generated.
     """
+    print(f"[DEBUG-HPO] report({config})")
     if os.path.exists(config['file_path']):
         with open(config['file_path'], 'rt') as json_file:
             trial_results = json.load(json_file)
@@ -512,10 +536,12 @@ def report(config: Dict[str, Any], score: float):
         trial_results['status'] = Status.RUNNING
         trial_results['scores'] = []
         trial_results['median'] = []
+        trial_results['iters'] = []
 
     trial_results['scores'].append(score)
     trial_results['median'].append(
         sum(trial_results['scores'])/len(trial_results['scores']))
+    trial_results['iters'].append(current_iters)
 
     # Update the current status ASAP in the file system.
     oldmask = os.umask(0o077)
@@ -524,7 +550,8 @@ def report(config: Dict[str, Any], score: float):
         json_file.flush()
     os.umask(oldmask)
 
-    if len(trial_results['scores']) >= config["iterations"]:
+    # if len(trial_results['scores']) >= config["iterations"]:
+    if trial_results['iters'][-1] >= config['iteration_limit']:
         trial_results['status'] = Status.STOP
     elif 'early_stop' in config and config['early_stop'] == "median_stop":
         save_path = os.path.dirname(config['file_path'])
@@ -548,12 +575,17 @@ def report(config: Dict[str, Any], score: float):
 
             if stop_flag:
                 trial_results['status'] = Status.STOP
-                logger.debug(f"median stop is executed. median score : {median_score} / "
-                             f"current best score : {curr_best_score}")
+                # logger.debug(f"median stop is executed. median score : {median_score} / "
+                #              f"current best score : {curr_best_score}")
+                print(f"[DEBUG-HPO] median stop is executed. median score : {median_score} / "
+                      f"current best score : {curr_best_score}")
+
     elif 'rungs' in config:
         # Async HyperBand
         save_path = os.path.dirname(config['file_path'])
-        curr_itr = len(trial_results['scores'])
+        # curr_itr = len(trial_results['scores'])
+        curr_itr = trial_results['iters'][-1]
+        print(f"[DEBUG-HPO] current iterations = {curr_itr} : {config['rungs']}")
 
         for rung_itr in config['rungs']:
             if curr_itr >= rung_itr:
@@ -604,6 +636,7 @@ def reportOOM(config):
     trial_results['status'] = Status.CUDAOOM
     trial_results['scores'] = []
     trial_results['median'] = []
+    trial_results['iters'] = []
 
     oldmask = os.umask(0o077)
     with open(config['file_path'], 'wt') as json_file:

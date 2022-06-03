@@ -9,7 +9,7 @@ from typing import Optional, Union, Dict, List
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
-from hpopt.hpopt_abstract import HpOpt
+from hpopt.base import HpOpt
 import hpopt
 
 logger = logging.getLogger(__name__)

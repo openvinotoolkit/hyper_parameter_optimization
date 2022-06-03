@@ -6,7 +6,7 @@ import json
 import os
 import logging
 
-from hpopt.hpopt_abstract import HpOpt
+from hpopt.base import HpOpt
 import hpopt
 
 logger = logging.getLogger(__name__)

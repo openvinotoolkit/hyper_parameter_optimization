@@ -1,1 +1,4 @@
-/hpopt/__pycache__
+.vscode
+venv
+__pycache__
+*.egg-info

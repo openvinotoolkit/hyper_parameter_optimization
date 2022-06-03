@@ -4,21 +4,21 @@
 
 import json
 import os
-from math import ceil, log
+from math import ceil, log, floor
 import logging
 from typing import Optional, Union, List, Dict
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
-from hpopt.hpopt_abstract import HpOpt
+from hpopt.base import HpOpt
 import hpopt
 
 logger = logging.getLogger(__name__)
 
 
-class AsyncHyperBand(HpOpt):
+class AsyncHyperBandWithIters(HpOpt):
     """
-    This implements the Asyncronous HyperBand scheduler.
+    This implements the Asyncronous HyperBand scheduler with iterations only.
     Please refer the below papers for the detailed algorithm.
 
     [1] "Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization", JMLR 2018
@@ -41,7 +41,7 @@ class AsyncHyperBand(HpOpt):
                  reduction_factor: int = 2,
                  default_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
                  **kwargs):
-        super(AsyncHyperBand, self).__init__(**kwargs)
+        super(AsyncHyperBandWithIters, self).__init__(**kwargs)
 
         if min_iterations is not None:
             if type(min_iterations) != int:
@@ -61,37 +61,56 @@ class AsyncHyperBand(HpOpt):
             elif num_brackets < 1:
                 raise ValueError(f'num_brackets should be bigger than 1. Your value is {num_brackets}')
 
-        self.min_iterations = min_iterations
-        self.reduction_factor = reduction_factor
-        self.num_brackets = num_brackets
-        self.expected_total_epochs = 0
-        self.updatable_schedule = False
-        self.hpo_status = {}
+        self._min_iterations = min_iterations
+        self._reduction_factor = reduction_factor
+        self._num_brackets = num_brackets
+        self._expected_total_iters = 0
+        self._updatable_schedule = False
+        # self.hpo_status = {}
+
+        # self.median_batch_size = floor((
+        #     self.search_space[self.batch_size_name].lower_space() + self.search_space[self.batch_size_name].upper_space()) / 2)
+        # print(f"[DEBUG-HPO] median of batch size = {self.median_batch_size} "
+        #       f"[{self.search_space[self.batch_size_name].lower_space()}, {self.search_space[self.batch_size_name].upper_space()}]")
+        self.median_batch_size = floor((
+            self.search_space[self.batch_size_name].range[0] + self.search_space[self.batch_size_name].range[1]) / 2)
+        print(f"[DEBUG-HPO] median of batch size = {self.median_batch_size} "
+              f"[{self.search_space[self.batch_size_name].range[0]}, {self.search_space[self.batch_size_name].range[1]}]")
+        if self.median_batch_size > self.full_dataset_size:
+            print(f"[DEBUG-HPO] batch size is bigger than size of training dataset. adjusted.")
+            self.median_batch_size = self.full_dataset_size
 
         # HPO auto configurator
         if self.num_trials is None or self.max_iterations is None or self.subset_ratio is None:
-            self.updatable_schedule = True
+            self._updatable_schedule = True
             self.num_trials, self.max_iterations, self.subset_ratio, \
-                self.expected_total_epochs, self.num_brackets, self.min_iterations \
-                = self.auto_config(expected_time_ratio=self.expected_time_ratio,
-                                   num_full_epochs=self.num_full_iterations,
-                                   full_dataset_size=self.full_dataset_size,
-                                   subset_ratio=self.subset_ratio,
-                                   non_pure_train_ratio=self.non_pure_train_ratio,
-                                   num_hyperparams=len(self.search_space),
-                                   reduction_factor=self.reduction_factor,
-                                   parallelism=self.num_workers,
-                                   min_epochs=self.min_iterations,
-                                   max_epochs=self.max_iterations)
-            logger.debug(f"auto-config: num_trials : {self.num_trials} min_iterations : {self.min_iterations} "
-                         f"max_iterations : {self.max_iterations} subset_ratio {self.subset_ratio} "
-                         f"expected_total_epochs : {self.expected_total_epochs} num_brackets: {self.num_brackets}")
-        else:
-            if self.num_brackets is None:
-                self.num_brackets = int(log(self.max_iterations) / log(self.reduction_factor)) + 1
+                self._expected_total_iters, self._num_brackets, self._min_iterations, \
+                self.min_iters, self.max_iters \
+                    = self.auto_config(expected_time_ratio=self.expected_time_ratio,
+                                    num_full_epochs=self.num_full_iterations,
+                                    full_dataset_size=self.full_dataset_size,
+                                    subset_ratio=self.subset_ratio,
+                                    non_pure_train_ratio=self.non_pure_train_ratio,
+                                    num_hyperparams=len(self.search_space),
+                                    reduction_factor=self._reduction_factor,
+                                    parallelism=self.num_workers,
+                                    min_epochs=self._min_iterations,
+                                    max_epochs=self.max_iterations,
+                                    batch_size=self.median_batch_size)
+            # logger.debug(f"auto-config: num_trials : {self.num_trials} min_iterations : {self._min_iterations} "
+            #              f"max_iterations : {self.max_iterations} subset_ratio {self.subset_ratio} "
+            #              f"expected_total_epochs : {self._expected_total_iters} num_brackets: {self._num_brackets}")
+            print(f"[DEBUG-HPO] AsyncHyperBandWithIters.__init__() num_trials : {self.num_trials}, min_iterations : {self._min_iterations}, "
+                  f"max_iterations : {self.max_iterations}, subset_ratio {self.subset_ratio}, "
+                  f"max_iters: {self.max_iters}, min_iters: {self.min_iters}, "
+                  f"expected_total_iters : {self._expected_total_iters}, num_brackets: {self._num_brackets}")
 
-            if self.min_iterations is None:
-                self.min_iterations = 1
+        else:
+            if self._num_brackets is None:
+                self._num_brackets = int(log(self.max_iterations) / log(self._reduction_factor)) + 1
+
+            if self._min_iterations is None:
+                self._min_iterations = 1
 
         # Initialize a bayesopt optimizer.
         # It will be used for generating trials.
@@ -144,7 +163,7 @@ class AsyncHyperBand(HpOpt):
                 logger.error("The size of dataset is changed. Stop resuming.")
                 raise ValueError("Dataset is changed.")
 
-            if self.hpo_status['reduction_factor'] != self.reduction_factor:
+            if self.hpo_status['reduction_factor'] != self._reduction_factor:
                 logger.error("reduction_factor is changed. Stop resuming.")
                 raise ValueError("reduction_factor is changed.")
         else:
@@ -154,7 +173,7 @@ class AsyncHyperBand(HpOpt):
             self.hpo_status['subset_ratio'] = self.subset_ratio
             self.hpo_status['image_resize'] = self.image_resize
             self.hpo_status['full_dataset_size'] = self.full_dataset_size
-            self.hpo_status['reduction_factor'] = self.reduction_factor
+            self.hpo_status['reduction_factor'] = self._reduction_factor
             self.hpo_status['config_list'] = []
 
         # num_gen_config represents the number of assigned configs.
@@ -176,10 +195,14 @@ class AsyncHyperBand(HpOpt):
 
         # Initialize the brackets
         self.rungs_in_brackets = []
-        for s in range(self.num_brackets):
-            self.rungs_in_brackets.append(self.get_rungs(self.min_iterations,
-                                                         self.max_iterations,
-                                                         self.reduction_factor, s))
+        for s in range(self._num_brackets):
+            # self.rungs_in_brackets.append(self.get_rungs(self._min_iterations,
+            #                                              self.max_iterations,
+            #                                              self._reduction_factor, s))
+            self.rungs_in_brackets.append(self.get_rungs(self.min_iters,
+                                                         self.max_iters,
+                                                         self._reduction_factor, s))
+
         # Get the max rung iterations
         # self.max_rung = 1
         # for rungs in self.rungs_in_brackets:
@@ -192,7 +215,7 @@ class AsyncHyperBand(HpOpt):
 
         # n0 is come from the notation in the paper, which means
         # the initial number of trials in each bracket.
-        n0_in_brackets = self.get_num_trials_in_brackets(self.reduction_factor, self.num_brackets)
+        n0_in_brackets = self.get_num_trials_in_brackets(self._reduction_factor, self._num_brackets)
 
         # Assign each trial to a bracket
         # according to the ratio of the relative number of trials in each bracket
@@ -223,7 +246,8 @@ class AsyncHyperBand(HpOpt):
             n0_in_brackets[trial['bracket']] -= 1
 
         # Generate trial configs up to self.num_trials
-        for i in range(num_ready_configs, self.num_trials):
+        # for i in range(num_ready_configs, self.num_trials):
+        for i in range(num_ready_configs, 5):
             bracket_id = 0
             for idx in reversed(range(len(n0_in_brackets))):
                 remained_num = n0_in_brackets[idx]
@@ -289,11 +313,16 @@ class AsyncHyperBand(HpOpt):
             return None
 
         # Check total number of executed epochs
-        if self.expected_total_epochs > 0:
-            num_executed_epochs = self.get_num_executed_epochs()
-            logger.debug(f"self.expected_total_epochs {self.expected_total_epochs} "
-                         f"num_executed_epochs {num_executed_epochs}")
-            if num_executed_epochs >= self.expected_total_epochs:
+        if self._expected_total_iters > 0:
+            # num_executed_epochs = self.get_num_executed_epochs()
+            # logger.debug(f"self.expected_total_epochs {self._expected_total_iters} "
+            #              f"num_executed_epochs {num_executed_epochs}")
+            # if num_executed_epochs >= self._expected_total_iters:
+            #     return None
+            num_executed_iters = self.get_num_executed_iters()
+            print(f"[DEBUG-HPO] expected total iters = {self._expected_total_iters} "
+                  f"executed iters = {num_executed_iters}")
+            if num_executed_iters >= self._expected_total_iters:
                 return None
 
         # Choose a config
@@ -322,7 +351,10 @@ class AsyncHyperBand(HpOpt):
         new_config['subset_ratio'] = self.subset_ratio
         new_config['resize_width'] = self.image_resize[0]
         new_config['resize_height'] = self.image_resize[1]
+        # added to calculate number of iterations
+        new_config['dataset_size'] = self.full_dataset_size
         new_config['mode'] = self.mode
+        new_config['iteration_limit'] = self.max_iters
 
         return new_config
 
@@ -354,26 +386,32 @@ class AsyncHyperBand(HpOpt):
         self.save_results()
 
         # If the current schedule is updatable, adjust it regarding to the latest information
-        if self.updatable_schedule is True:
-            logger.debug("asha update-config start")
+        if self._updatable_schedule is True:
+            # logger.debug("asha update-config start")
+            print("[DEBUG-HPO] hyperband update-config start")
 
             new_num_trials, new_max_iterations, new_subset_ratio, \
-                new_expected_total_epochs, new_num_brackets, new_min_iterations \
+                new_expected_total_epochs, new_num_brackets, new_min_iterations, \
+                min_iters, max_iters \
                 = self.auto_config(expected_time_ratio=self.expected_time_ratio,
                                    num_full_epochs=self.num_full_iterations,
                                    full_dataset_size=self.full_dataset_size,
                                    subset_ratio=self.subset_ratio,
                                    non_pure_train_ratio=self.non_pure_train_ratio,
                                    num_hyperparams=len(self.search_space),
-                                   reduction_factor=self.reduction_factor,
+                                   reduction_factor=self._reduction_factor,
                                    parallelism=self.num_workers,
-                                   min_epochs=self.min_iterations,
-                                   max_epochs=self.max_iterations)
+                                   min_epochs=self._min_iterations,
+                                   max_epochs=self.max_iterations,
+                                   batch_size=self.median_batch_size)
             logger.debug(f"update-config: num_trials : {new_num_trials} min_iterations : {new_min_iterations} "
                          f"max_iterations : {new_max_iterations} subset_ratio : {new_subset_ratio} "
                          f"expected_total_epochs : {new_expected_total_epochs} num_brackets : {new_num_brackets}")
-
-            self.expected_total_epochs = new_expected_total_epochs
+            # print(f"[DEBUG-HPO] update-config: num_trials = {new_num_trials}, min_iterations = {new_min_iterations}, "
+            #       f"max_iterations = {new_max_iterations}, subset_ratio = {new_subset_ratio}, "
+            #       f"expected_total_epochs = {new_expected_total_epochs}, num_brackets = {new_num_brackets}, "
+            #       f"max_iters = {max_iters}, min_iters = {min_iters}")
+            self._expected_total_iters = new_expected_total_epochs
 
     # Lower the upper bound of batch size
     def shrink_bs_search_space(self, not_allowed_config):
@@ -439,6 +477,22 @@ class AsyncHyperBand(HpOpt):
 
         return num_executed_epochs
 
+    def get_num_executed_iters(self):
+        num_executed_iters = 0
+
+        for trial_id, config_item in enumerate(self.hpo_status['config_list']):
+            trial_file_path = hpopt.get_trial_path(self.save_path, trial_id)
+            trial_results = hpopt.load_json(trial_file_path)
+            if trial_results is not None:
+                # scores = trial_results.get('scores', None)
+                # if scores is not None:
+                #     num_executed_epochs += len(scores)
+                iters = trial_results.get('iters', None)
+                if iters is not None:
+                    num_executed_iters += iters[-1]
+
+        return num_executed_iters
+
     def auto_config(self,
                     expected_time_ratio: Union[int, float],
                     num_full_epochs: int,
@@ -449,7 +503,8 @@ class AsyncHyperBand(HpOpt):
                     reduction_factor: int,
                     parallelism: int,
                     min_epochs: Optional[int],
-                    max_epochs: Optional[int]):
+                    max_epochs: Optional[int],
+                    batch_size: Optional[int]):
         # All arguments should be specified.
         if expected_time_ratio is None:
             raise ValueError("expected_time_ratio should be specified.")
@@ -471,6 +526,20 @@ class AsyncHyperBand(HpOpt):
         if reduction_factor is None:
             reduction_factor = 2
 
+        print(
+            f"[DEBUG-HPO] called auto_config(expected_time_ratio = {expected_time_ratio}, "
+            f"num_full_epochs = {num_full_epochs}, "
+            f"full_dataset_size = {full_dataset_size}, "
+            f"subset_ratio = {subset_ratio}, "
+            f"non_pure_train_ratio = {non_pure_train_ratio}, "
+            f"num_hyperparams = {num_hyperparams}, "
+            f"reduction_factor = {reduction_factor}, "
+            f"parallelism = {parallelism}, "
+            f"min_epochs = {min_epochs}, "
+            f"max_epochs = {max_epochs}, "
+            f"batch_size = {batch_size})"
+        )
+
         # Create the rung schedule
 
         # 1. Decide the max epochs
@@ -482,7 +551,9 @@ class AsyncHyperBand(HpOpt):
             # set the max epochs to the next rung schedule larger than the number
 
         # 1. Config target parameters as large as possible
+        # max_iterations = -1
         if max_epochs is None:
+            # max_iterations = num_full_epochs
             max_epochs = num_full_epochs
 
         if min_epochs is None:
@@ -490,6 +561,10 @@ class AsyncHyperBand(HpOpt):
 
         if min_epochs > max_epochs:
             raise ValueError("min_epochs should be less than or equal to max_epochs.")
+
+        max_iters = int(full_dataset_size / batch_size) * max_epochs
+        min_iters = int(full_dataset_size / batch_size) * min_epochs
+        print(f"[DEBUG-HPO] max_iters = {max_iters}, min_iters = {min_iters}")
 
         if subset_ratio is None:
             # Default subset ratio is 0.2
@@ -506,27 +581,35 @@ class AsyncHyperBand(HpOpt):
 
         num_trials = 0
         num_brackets = 1
-        new_min_epochs = min_epochs
-        new_max_epochs = max_epochs
+        # new_min_epochs = min_epochs
+        # new_max_epochs = max_epochs
         current_time_ratio = expected_time_ratio * 0.5
 
         # Update num_full_epochs from previous trials
-        max_epochs_in_trials = 0
+        # max_epochs_in_trials = 0
+        max_iters_in_trials = 0
 
         if self.hpo_status.get('config_list', None) is not None:
             for trial_id, config_item in enumerate(self.hpo_status['config_list']):
                 trial_file_path = hpopt.get_trial_path(self.save_path, trial_id)
                 trial_results = hpopt.load_json(trial_file_path)
                 if trial_results is not None:
-                    scores = trial_results.get('scores', None)
-                    if scores is not None:
-                        if len(scores) > max_epochs_in_trials:
-                            max_epochs_in_trials = len(scores)
+                    # scores = trial_results.get('scores', None)
+                    # if scores is not None:
+                    #     if len(scores) > max_epochs_in_trials:
+                    #         max_epochs_in_trials = len(scores)
+                    iters = trial_results.get('iters', None)
+                    if iters is not None:
+                        if iters[-1] > max_iters_in_trials:
+                            max_iters_in_trials = iters[-1]
 
-            logger.debug(f"(before) max_epochs_in_trials: {max_epochs_in_trials}")
+            # logger.debug(f"(before) max_epochs_in_trials: {max_epochs_in_trials}")
+            print(f"[DEBUG-HPO] (before) max_iters_in_trials: {max_iters_in_trials}")
 
-            if max_epochs_in_trials > 0:
-                rungs = self.get_rungs(min_epochs, num_full_epochs, reduction_factor, 0)
+            # if max_epochs_in_trials > 0:
+            if max_iters_in_trials > 0:
+                # rungs = self.get_rungs(min_epochs, num_full_epochs, reduction_factor, 0)
+                rungs = self.get_rungs(min_iters, max_iters, reduction_factor, 0)
 
                 # Minimum new_max_epochs
                 if len(rungs) > 5:
@@ -536,28 +619,49 @@ class AsyncHyperBand(HpOpt):
 
                 logger.debug(f"rungs: {rungs}")
                 for rung in reversed(rungs):
-                    if rung > max_epochs_in_trials:
-                        new_max_epochs = rung
+                    # if rung > max_epochs_in_trials:
+                    if rung > max_iters_in_trials:
+                        # new_max_epochs = rung
+                        max_iters = rung
                         break
-            logger.debug(f"(after) new_max_epochs: {new_max_epochs}")
+            # logger.debug(f"(after) new_max_epochs: {new_max_epochs}")
+            print(f"[DEBUG-HPO] (after) new max_iters:{max_iters}")
 
-            num_full_epochs = new_max_epochs
+            # num_full_epochs = new_max_epochs
+            # num_full_epochs = int(full_dataset_size / (new_max_iters * batch_size))
 
         # 2. Update the target parameters iteratively
         while current_time_ratio < expected_time_ratio:
             num_trials = num_trials + 1
 
-            num_total_epochs = self.get_total_epochs(num_trials, reduction_factor,
-                                                     num_brackets, new_min_epochs, new_max_epochs)
+            # num_total_epochs = self.get_total_epochs(num_trials, reduction_factor,
+            #                                          num_brackets, new_min_epochs, new_max_epochs)
+            num_total_iters = self.get_total_iters(num_trials, reduction_factor,
+                                                   num_brackets, min_iters, max_iters)
+            # print(f"[DEBUG-HPO] num_total_iters = {num_total_iters} for trial-brackets ({num_trials}-{num_brackets})")
 
-            current_time_ratio = num_total_epochs / num_full_epochs / parallelism * \
+            current_time_ratio = num_total_iters / max_iters / parallelism * \
                 ((1 - non_pure_train_ratio) * subset_ratio + non_pure_train_ratio)
 
         # If the remained number of epochs is less than the max_epochs_in_trials,
         # HPO is terminated.
         # num_total_epochs = num_total_epochs - max_epochs_in_trials
+        print(f"[DEBUG-HPO] auto_config() results: num_trials ={num_trials},"
+            f" max_epochs = {max_epochs}, min_epochs = {min_epochs},"
+            f" max_iters {max_iters}, min_iters = {min_iters},"
+            f" num_total_iters = {num_total_iters},"
+            f" num_brackets = {num_brackets}, subset_ratio = {subset_ratio}")
 
-        return num_trials, max_epochs, subset_ratio, num_total_epochs, num_brackets, min_epochs
+        return (
+            num_trials,
+            max_epochs,
+            subset_ratio,
+            num_total_iters,
+            num_brackets,
+            min_epochs,
+            min_iters,
+            max_iters
+        )
 
     def get_total_epochs(self,
                          num_trials: int,
@@ -588,14 +692,51 @@ class AsyncHyperBand(HpOpt):
 
         return num_total_epochs
 
+    def get_total_iters(self,
+                        num_trials: int,
+                        reduction_factor: int,
+                        num_brackets: int,
+                        min_iters: int,
+                        max_iters:int):
+        num_total_iters = 0
+
+        num_trials_in_brackets = self.get_num_trials_in_brackets(reduction_factor, num_brackets)
+        # print(f"[DEBUG-HPO] num_trials_in_brackets = {num_trials_in_brackets}")
+
+        brackets_total = sum(num_trials_in_brackets)
+        brackets_ratio = [float(b / brackets_total) for b in num_trials_in_brackets]
+
+        for i in range(len(num_trials_in_brackets)):
+            num_trials_in_brackets[i] = int(brackets_ratio[i] * num_trials)
+
+        num_trials_in_brackets[0] += (num_trials - sum(num_trials_in_brackets))
+
+        for s, num_trials in enumerate(num_trials_in_brackets):
+            rungs = self.get_rungs(min_iters, max_iters, reduction_factor, s)
+            remained_trials = num_trials
+            for rung in reversed(rungs):
+                num_stop_trials = remained_trials - (remained_trials // reduction_factor)
+                num_total_iters += (num_stop_trials * rung)
+                remained_trials = remained_trials // reduction_factor
+            num_total_iters += (remained_trials * max_iters)
+
+        return num_total_iters
+
+
     def get_progress(self):
-        # epoch based progress
-        epoch_progress = min(self.get_num_executed_epochs()
-            / self.expected_total_epochs, 0.99)
+        # # epoch based progress
+        # epoch_progress = min(self.get_num_executed_epochs()
+        #     / self._expected_total_iters, 0.99)
+        # iteration based progress
+        iter_progress = min(self.get_num_executed_iters() / self._expected_total_iters, 0.99)
         # trial based progress
         finished_trials = sum([val['status'] == hpopt.Status.STOP
                     for val in self.hpo_status['config_list']])
         trial_progress = finished_trials / self.num_trials
 
-        return min(0.99, max(epoch_progress, trial_progress))
+        # return min(0.99, max(epoch_progress, trial_progress))
+        print(f"[DEBUG-HPO] get_progress() iter = {iter_progress}/{self._expected_total_iters}"
+              f", trial {trial_progress}/{self.num_trials}")
+
+        return min(0.99, max(iter_progress, trial_progress))
 
