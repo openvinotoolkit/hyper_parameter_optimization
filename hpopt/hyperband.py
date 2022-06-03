@@ -246,8 +246,7 @@ class AsyncHyperBandWithIters(HpOpt):
             n0_in_brackets[trial['bracket']] -= 1
 
         # Generate trial configs up to self.num_trials
-        # for i in range(num_ready_configs, self.num_trials):
-        for i in range(num_ready_configs, 5):
+        for i in range(num_ready_configs, self.num_trials):
             bracket_id = 0
             for idx in reversed(range(len(n0_in_brackets))):
                 remained_num = n0_in_brackets[idx]

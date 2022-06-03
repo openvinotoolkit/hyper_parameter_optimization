@@ -607,8 +607,10 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
 
                     if stop_flag:
                         trial_results['status'] = Status.STOP
-                        logger.info(f"[ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
-                                    f"{cutoff_score} > {curr_best_score}")
+                        # logger.info(f"[ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
+                        #             f"{cutoff_score} > {curr_best_score}")
+                        print(f"[DEBUG-HPO] [ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
+                              f"{cutoff_score} > {curr_best_score}")
 
     oldmask = os.umask(0o077)
     with open(config['file_path'], 'wt') as json_file:
