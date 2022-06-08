@@ -449,13 +449,15 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
         _rung_list (list): list of rungs in the current bracket
         mode (str): max or min. Decide whether to find max value or min value.
     """
+    print(f"[DEBUG-HPO] get_cutoff_score({target_rung}, {_rung_list}, {mode}")
     hpo_status = load_json(get_status_path(save_path))
 
     if hpo_status is None:
         return None
 
-    # Gather all scores
+    # Gather all scores with iter number
     hpo_trial_results = []
+    hpo_trial_results_iter_num = []
 
     for idx, config in enumerate(hpo_status['config_list']):
         if config['status'] in [hpopt.Status.RUNNING, hpopt.Status.STOP]:
@@ -464,6 +466,10 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
 
             if trial_results is not None:
                 hpo_trial_results.append(trial_results['scores'])
+                hpo_trial_results_iter_num.append(trial_results['iters'])
+    if len(hpo_trial_results) != len(hpo_trial_results_iter_num):
+        raise RuntimeError(f"mismatch length of trial results and iteration number {hpo_trial_results}/{hpo_trial_results_iter_num}")
+    # print(f"[DEBUG-HPO] hpo_trial_results/iters# = {hpo_trial_results}/{hpo_trial_results_iter_num}")
 
     # Run a SHA (not ASHA)
     rung_score_list = []
@@ -473,45 +479,63 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
     if len(hpo_trial_results) > 1:
         rf = hpo_status['reduction_factor']
 
-        for curr_rung in rung_list:
+        for curr_rung_idx, curr_rung in enumerate(rung_list):
             if curr_rung <= target_rung:
                 rung_score_list.clear()
-
-                for trial_result in hpo_trial_results:
-                    if len(trial_result) >= curr_rung:
-                        if mode == 'max':
-                            rung_score_list.append(max(trial_result[:curr_rung]))
+                print(f"[DEBUG-HPO] curr_rung = {curr_rung_idx}: {curr_rung}")
+                for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_iter_num)):
+                    if iter != []:
+                        if iter[-1] >= curr_rung:
+                            if curr_rung_idx == 0:
+                                rung_score_list.append(trial_result[curr_rung_idx])
+                            else:
+                                if mode == 'max':
+                                    rung_score_list.append(max(trial_result[:curr_rung_idx]))
+                                else:
+                                    rung_score_list.append(min(trial_result[:curr_rung_idx]))
                         else:
-                            rung_score_list.append(min(trial_result[:curr_rung]))
-                    else:
-                        trial_result.clear()
+                            trial_result.clear()
+                            iter.clear()
 
                 if len(rung_score_list) > 1:
+                    print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
                     if mode == 'max':
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
                     else:
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 / rf) * 100)
-
-                    for trial_result in hpo_trial_results:
-                        if len(trial_result) >= curr_rung:
-                            if mode == 'max':
-                                if max(trial_result[:curr_rung]) < cutt_off_score:
-                                    trial_result.clear()
-                            else:
-                                if min(trial_result[:curr_rung]) > cutt_off_score:
-                                    trial_result.clear()
+                    print(f"[DEBUG-HPO] cut_off_score = {cutt_off_score}")
+                    print(f"[DEBUG-HPO] hpo_trial_results/iters# = {hpo_trial_results}/{hpo_trial_results_iter_num}")
+                    for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_iter_num)):
+                        if iter != []:
+                            if iter[-1] >= curr_rung:
+                                if curr_rung_idx == 0:
+                                    target_score = trial_result[curr_rung_idx]
+                                else:
+                                    target_score = max(trial_result[:curr_rung_idx]) if mode == 'max' else min(trial_result[:curr_rung_idx])
+                                if mode == 'max':
+                                    if target_score < cutt_off_score:
+                                        trial_result.clear()
+                                        iter.clear()
+                                else:
+                                    if target_score > cutt_off_score:
+                                        trial_result.clear()
+                                        iter.clear()
                 else:
                     break
             else:
                 break
-
+    print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
     if len(rung_score_list) > 1:
         rf = hpo_status['reduction_factor']
 
         if mode == 'max':
-            return np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
+            ret = np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
+            print(f"[DEBUG-HPO] return {ret}")
+            return ret
         else:
-            return np.nanpercentile(rung_score_list, (1 / rf) * 100)
+            ret = np.nanpercentile(rung_score_list, (1 / rf) * 100)
+            print(f"[DEBUG-HPO] return {ret}")
+            return ret
 
     return None
 
