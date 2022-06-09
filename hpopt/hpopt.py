@@ -19,7 +19,7 @@ from torchvision import transforms
 
 import hpopt
 # from hpopt.asha import AsyncHyperBand
-from hpopt.hyperband import AsyncHyperBandWithIters
+from hpopt.hyperband import AsyncHyperBand
 from hpopt.dummy import DummyOpt
 from hpopt.smbo import BayesOpt
 
@@ -145,7 +145,9 @@ def create(full_dataset_size: int,
            kappa: Union[float, int] = 2.576,
            kappa_decay: Union[float, int] = 1,
            kappa_decay_delay: int = 0,
-           default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None):
+           default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None,
+           use_epoch: Optional[bool] = False,
+    ):
     """
     Create a new hpopt instance.
 
@@ -162,7 +164,7 @@ def create(full_dataset_size: int,
                     minimizing or maximizing the metric attribute.
         num_init_trials (int): Only for SMBO. How many trials to use to init SMBO.
         num_trials (int): How many training to conduct for HPO.
-        max_iterations (int): Max training epoch for each trial.
+        max_iterations (int): Max training iterations for each trial.
         min_iterations (int): Only for ASHA. Only stop trials at least this old in time.
         reduction_factor (int): Only for ASHA. Used to set halving rate and amount.
                                 This is simply a unit-less scalar.
@@ -188,6 +190,8 @@ def create(full_dataset_size: int,
         kappa_decay (float or int): Only for SMBO. Multiply kappa by kappa_decay every trials.
         kappa_decay_delay (int): Only for SMBO. From first trials to kappa_decay_delay trials,
                                  kappa isn't multiplied to kappa_decay.
+        default_hyper_parameters (List[Dict] or Dict): default hyper-parameters.
+        use_epoch (bool): use epoch unit instead of epoch.
     """
     os.makedirs(save_path, exist_ok=True)
     print("[DEBUG-HPO] create()")
@@ -198,48 +202,31 @@ def create(full_dataset_size: int,
         clear_trial_files(save_path)
 
     if search_alg == 'bayes_opt':
-        return BayesOpt(save_path=save_path,
-                        search_space=search_space,
-                        early_stop=early_stop,
-                        mode=mode,
-                        num_init_trials=num_init_trials,
-                        num_trials=num_trials,
-                        max_iterations=max_iterations,
-                        subset_ratio=subset_ratio,
-                        batch_size_name=batch_size_name,
-                        image_resize=image_resize,
-                        metric=metric,
-                        resume=resume,
-                        expected_time_ratio=expected_time_ratio,
-                        num_full_iterations=num_full_iterations,
-                        full_dataset_size=full_dataset_size,
-                        non_pure_train_ratio=non_pure_train_ratio,
-                        num_workers=num_workers,
-                        kappa=kappa,
-                        kappa_decay=kappa_decay,
-                        kappa_decay_delay=kappa_decay_delay,
-                        default_hyper_parameters=default_hyper_parameters)
+        return BayesOpt(
+            save_path=save_path,
+            search_space=search_space,
+            early_stop=early_stop,
+            mode=mode,
+            num_init_trials=num_init_trials,
+            num_trials=num_trials,
+            max_iterations=max_iterations,
+            subset_ratio=subset_ratio,
+            batch_size_name=batch_size_name,
+            image_resize=image_resize,
+            metric=metric,
+            resume=resume,
+            expected_time_ratio=expected_time_ratio,
+            num_full_iterations=num_full_iterations,
+            full_dataset_size=full_dataset_size,
+            non_pure_train_ratio=non_pure_train_ratio,
+            num_workers=num_workers,
+            kappa=kappa,
+            kappa_decay=kappa_decay,
+            kappa_decay_delay=kappa_decay_delay,
+            default_hyper_parameters=default_hyper_parameters
+        )
     elif search_alg == 'asha':
-        # return AsyncHyperBand(save_path=save_path,
-        #                       search_space=search_space,
-        #                       mode=mode,
-        #                       num_trials=num_trials,
-        #                       max_iterations=max_iterations,
-        #                       min_iterations=min_iterations,
-        #                       reduction_factor=reduction_factor,
-        #                       num_brackets=num_brackets,
-        #                       subset_ratio=subset_ratio,
-        #                       batch_size_name=batch_size_name,
-        #                       image_resize=image_resize,
-        #                       metric=metric,
-        #                       resume=resume,
-        #                       expected_time_ratio=expected_time_ratio,
-        #                       num_full_iterations=num_full_iterations,
-        #                       full_dataset_size=full_dataset_size,
-        #                       non_pure_train_ratio=non_pure_train_ratio,
-        #                       num_workers=num_workers,
-        #                       default_hyper_parameters=default_hyper_parameters)
-        return AsyncHyperBandWithIters(
+        return AsyncHyperBand(
             save_path=save_path,
             search_space=search_space,
             mode=mode,
@@ -258,7 +245,8 @@ def create(full_dataset_size: int,
             full_dataset_size=full_dataset_size,
             non_pure_train_ratio=non_pure_train_ratio,
             num_workers=num_workers,
-            default_hyper_parameters=default_hyper_parameters
+            default_hyper_parameters=default_hyper_parameters,
+            use_epoch=use_epoch
         )
     else:
         raise ValueError(f'Not supported search algorithm: {search_alg}')
@@ -449,7 +437,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
         _rung_list (list): list of rungs in the current bracket
         mode (str): max or min. Decide whether to find max value or min value.
     """
-    print(f"[DEBUG-HPO] get_cutoff_score({target_rung}, {_rung_list}, {mode}")
+    print(f"[DEBUG-HPO] get_cutoff_score({target_rung}, {_rung_list}, {mode})")
     hpo_status = load_json(get_status_path(save_path))
 
     if hpo_status is None:
@@ -457,7 +445,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
 
     # Gather all scores with iter number
     hpo_trial_results = []
-    hpo_trial_results_iter_num = []
+    hpo_trial_results_imgs_num = []
 
     for idx, config in enumerate(hpo_status['config_list']):
         if config['status'] in [hpopt.Status.RUNNING, hpopt.Status.STOP]:
@@ -466,10 +454,9 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
 
             if trial_results is not None:
                 hpo_trial_results.append(trial_results['scores'])
-                hpo_trial_results_iter_num.append(trial_results['iters'])
-    if len(hpo_trial_results) != len(hpo_trial_results_iter_num):
-        raise RuntimeError(f"mismatch length of trial results and iteration number {hpo_trial_results}/{hpo_trial_results_iter_num}")
-    # print(f"[DEBUG-HPO] hpo_trial_results/iters# = {hpo_trial_results}/{hpo_trial_results_iter_num}")
+                hpo_trial_results_imgs_num.append(trial_results['images'])
+    if len(hpo_trial_results) != len(hpo_trial_results_imgs_num):
+        raise RuntimeError(f"mismatch length of trial results and number of trained images {hpo_trial_results}/{hpo_trial_results_imgs_num}")
 
     # Run a SHA (not ASHA)
     rung_score_list = []
@@ -483,7 +470,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
             if curr_rung <= target_rung:
                 rung_score_list.clear()
                 print(f"[DEBUG-HPO] curr_rung = {curr_rung_idx}: {curr_rung}")
-                for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_iter_num)):
+                for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_imgs_num)):
                     if iter != []:
                         if iter[-1] >= curr_rung:
                             if curr_rung_idx == 0:
@@ -504,8 +491,8 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                     else:
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 / rf) * 100)
                     print(f"[DEBUG-HPO] cut_off_score = {cutt_off_score}")
-                    print(f"[DEBUG-HPO] hpo_trial_results/iters# = {hpo_trial_results}/{hpo_trial_results_iter_num}")
-                    for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_iter_num)):
+                    print(f"[DEBUG-HPO] hpo_trial_results/images# = {hpo_trial_results}/{hpo_trial_results_imgs_num}")
+                    for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_imgs_num)):
                         if iter != []:
                             if iter[-1] >= curr_rung:
                                 if curr_rung_idx == 0:
@@ -524,7 +511,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                     break
             else:
                 break
-    print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
+    # print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
     if len(rung_score_list) > 1:
         rf = hpo_status['reduction_factor']
 
@@ -540,7 +527,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
     return None
 
 
-def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = -1):
+def report(config: Dict[str, Any], score: float, current_s: Optional[int] = -1):
     """
     report score to Hpopt.
 
@@ -560,12 +547,14 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
         trial_results['status'] = Status.RUNNING
         trial_results['scores'] = []
         trial_results['median'] = []
-        trial_results['iters'] = []
+        trial_results['images'] = []
 
+    batch_size = config['params']['learning_parameters.batch_size']
+    print(f"[DEBUG-HPO] report() batch size of this trial = {batch_size}")
     trial_results['scores'].append(score)
     trial_results['median'].append(
         sum(trial_results['scores'])/len(trial_results['scores']))
-    trial_results['iters'].append(current_iters)
+    trial_results['images'].append(current_iters * batch_size)
 
     # Update the current status ASAP in the file system.
     oldmask = os.umask(0o077)
@@ -575,7 +564,7 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
     os.umask(oldmask)
 
     # if len(trial_results['scores']) >= config["iterations"]:
-    if trial_results['iters'][-1] >= config['iteration_limit']:
+    if trial_results['images'][-1] >= config['iteration_limit']:
         trial_results['status'] = Status.STOP
     elif 'early_stop' in config and config['early_stop'] == "median_stop":
         save_path = os.path.dirname(config['file_path'])
@@ -608,19 +597,19 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
         # Async HyperBand
         save_path = os.path.dirname(config['file_path'])
         # curr_itr = len(trial_results['scores'])
-        curr_itr = trial_results['iters'][-1]
+        curr_itr = trial_results['images'][-1]
         print(f"[DEBUG-HPO] current iterations = {curr_itr} : {config['rungs']}")
 
-        for rung_itr in config['rungs']:
+        for rung_iter_idx, rung_itr in enumerate(config['rungs']):
             if curr_itr >= rung_itr:
                 # Decide whether to promote to the next rung or not
                 cutoff_score = get_cutoff_score(save_path, rung_itr, config['rungs'], config['mode'])
 
                 if cutoff_score is not None:
                     if config['mode'] == 'min':
-                        curr_best_score = min(trial_results['scores'][:rung_itr])
+                        curr_best_score = min(trial_results['scores'][:rung_iter_idx])
                     else:
-                        curr_best_score = max(trial_results['scores'][:rung_itr])
+                        curr_best_score = max(trial_results['scores'][:rung_iter_idx])
 
                     stop_flag = False
 
@@ -662,7 +651,7 @@ def reportOOM(config):
     trial_results['status'] = Status.CUDAOOM
     trial_results['scores'] = []
     trial_results['median'] = []
-    trial_results['iters'] = []
+    trial_results['images'] = []
 
     oldmask = os.umask(0o077)
     with open(config['file_path'], 'wt') as json_file:
