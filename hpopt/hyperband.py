@@ -566,7 +566,12 @@ class AsyncHyperBand(HpOpt):
             print(f"[DEBUG-HPO] (before) max_num_images_in_trials: {max_num_images_in_trials}")
 
             if max_num_images_in_trials > 0:
-                rungs = self.get_rungs(n_imgs_for_full_train, n_imgs_for_min_train, reduction_factor, 0)
+                rungs = self.get_rungs(
+                    max_t=n_imgs_for_full_train,
+                    min_t=n_imgs_for_min_train,
+                    rf=reduction_factor,
+                    s=0
+                )
 
                 if len(rungs) > 5:
                     rungs = rungs[:-5]
