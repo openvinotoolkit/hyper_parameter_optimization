@@ -527,7 +527,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
     return None
 
 
-def report(config: Dict[str, Any], score: float, current_s: Optional[int] = -1):
+def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = -1):
     """
     report score to Hpopt.
 
