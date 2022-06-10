@@ -491,7 +491,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                     else:
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 / rf) * 100)
                     print(f"[DEBUG-HPO] cut_off_score = {cutt_off_score}")
-                    print(f"[DEBUG-HPO] hpo_trial_results/images# = {hpo_trial_results}/{hpo_trial_results_imgs_num}")
+                    # print(f"[DEBUG-HPO] hpo_trial_results/images# = {hpo_trial_results}/{hpo_trial_results_imgs_num}")
                     for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_imgs_num)):
                         if iter != []:
                             if iter[-1] >= curr_rung:
@@ -499,6 +499,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                                     target_score = trial_result[curr_rung_idx]
                                 else:
                                     target_score = max(trial_result[:curr_rung_idx]) if mode == 'max' else min(trial_result[:curr_rung_idx])
+                                print(f"[DEBUG-HPO] target score = {target_score}")
                                 if mode == 'max':
                                     if target_score < cutt_off_score:
                                         trial_result.clear()
@@ -549,11 +550,17 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
         trial_results['median'] = []
         trial_results['images'] = []
 
-    batch_size = config['params']['learning_parameters.batch_size']
-    print(f"[DEBUG-HPO] report() batch size of this trial = {batch_size}")
+    
     trial_results['scores'].append(score)
     trial_results['median'].append(
         sum(trial_results['scores'])/len(trial_results['scores']))
+
+    batch_size = config['params'].get(config['batch_size_param_name'])
+    print(f"[DEBUG-HPO] report() batch size of this trial = {batch_size}")
+    if batch_size is None:
+        batch_size = config.get('batch_size')
+    if batch_size is None:
+        raise RuntimeError("cannot find batch size from config or h-params")
     trial_results['images'].append(current_iters * batch_size)
 
     # Update the current status ASAP in the file system.
@@ -620,10 +627,9 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
 
                     if stop_flag:
                         trial_results['status'] = Status.STOP
-                        # logger.info(f"[ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
-                        #             f"{cutoff_score} > {curr_best_score}")
                         print(f"[DEBUG-HPO] [ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
                               f"{cutoff_score} > {curr_best_score}")
+                        break
 
     oldmask = os.umask(0o077)
     with open(config['file_path'], 'wt') as json_file:

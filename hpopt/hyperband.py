@@ -43,7 +43,6 @@ class AsyncHyperBand(HpOpt):
                  use_epoch: Optional[bool] = False,
                  **kwargs):
         super(AsyncHyperBand, self).__init__(**kwargs)
-
         if min_iterations is not None:
             if type(min_iterations) != int:
                 raise TypeError('min_iterations should be int type')
@@ -104,11 +103,20 @@ class AsyncHyperBand(HpOpt):
                   f"expected_total_images : {self._expected_total_images}, num_brackets: {self._num_brackets}")
 
         else:
+            if self.max_iterations is None:
+                self.max_iterations = self.num_full_iterations
+
             if self._num_brackets is None:
                 self._num_brackets = int(log(self.max_iterations) / log(self._reduction_factor)) + 1
 
             if self._min_iterations is None:
                 self._min_iterations = 1
+
+            if self.subset_ratio is None:
+                self.subset_ratio = 1.0
+
+            self.n_imgs_for_full_train = self.full_dataset_size * self.subset_ratio * self.max_iterations
+            self.n_imgs_for_min_train = self.full_dataset_size * self.subset_ratio * self._min_iterations
 
         # Initialize a bayesopt optimizer.
         # It will be used for generating trials.
@@ -194,9 +202,6 @@ class AsyncHyperBand(HpOpt):
         # Initialize the brackets
         self.rungs_in_brackets = []
         for s in range(self._num_brackets):
-            # self.rungs_in_brackets.append(self.get_rungs(self._min_iterations,
-            #                                              self.max_iterations,
-            #                                              self._reduction_factor, s))
             self.rungs_in_brackets.append(self.get_rungs(self.n_imgs_for_min_train,
                                                          self.n_imgs_for_full_train,
                                                          self._reduction_factor, s))
@@ -347,6 +352,7 @@ class AsyncHyperBand(HpOpt):
         new_config['dataset_size'] = self.full_dataset_size
         new_config['mode'] = self.mode
         new_config['iteration_limit'] = self.n_imgs_for_full_train
+        new_config['batch_size_param_name'] = self.batch_size_name
 
         return new_config
 

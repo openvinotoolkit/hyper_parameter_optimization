@@ -36,7 +36,6 @@ class BayesOpt(HpOpt):
                  default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None,
                  **kwargs):
         super(BayesOpt, self).__init__(**kwargs)
-
         self.updatable_schedule = False
         self.early_stop = early_stop
 
