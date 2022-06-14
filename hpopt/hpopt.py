@@ -438,13 +438,19 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
         mode (str): max or min. Decide whether to find max value or min value.
     """
     print(f"[DEBUG-HPO] get_cutoff_score({target_rung}, {_rung_list}, {mode})")
-    hpo_status = load_json(get_status_path(save_path))
+    status_file_path = get_status_path(save_path)
+    if not os.path.exists(status_file_path):
+        print(f"not existed status json file {status_file_path}")
+        return None
+
+    hpo_status = load_json(status_file_path)
 
     if hpo_status is None:
+        print(f"failed to load json file {status_file_path}")
         return None
 
     # Gather all scores with iter number
-    hpo_trial_results = []
+    hpo_trial_results_scores = []
     hpo_trial_results_imgs_num = []
 
     for idx, config in enumerate(hpo_status['config_list']):
@@ -453,36 +459,46 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
             trial_results = load_json(trial_file_path)
 
             if trial_results is not None:
-                hpo_trial_results.append(trial_results['scores'])
+                hpo_trial_results_scores.append(trial_results['scores'])
                 hpo_trial_results_imgs_num.append(trial_results['images'])
-    if len(hpo_trial_results) != len(hpo_trial_results_imgs_num):
-        raise RuntimeError(f"mismatch length of trial results and number of trained images {hpo_trial_results}/{hpo_trial_results_imgs_num}")
-
+    if len(hpo_trial_results_scores) != len(hpo_trial_results_imgs_num):
+        raise RuntimeError(f"mismatch length of trial results and number of trained images {hpo_trial_results_scores}/{hpo_trial_results_imgs_num}")
+    print(f"scores = {hpo_trial_results_scores}")
+    print(f"num_imgs = {hpo_trial_results_imgs_num}")
     # Run a SHA (not ASHA)
     rung_score_list = []
     rung_list = _rung_list.copy()
     rung_list.sort(reverse=False)
-
-    if len(hpo_trial_results) > 1:
+    print(f"[DEBUG-HPO] rung_list = {rung_list}")
+    if len(hpo_trial_results_scores) > 1:
         rf = hpo_status['reduction_factor']
 
-        for curr_rung_idx, curr_rung in enumerate(rung_list):
+        # for curr_rung_idx, curr_rung in enumerate(rung_list):
+        for curr_rung in rung_list:
             if curr_rung <= target_rung:
                 rung_score_list.clear()
-                print(f"[DEBUG-HPO] curr_rung = {curr_rung_idx}: {curr_rung}")
-                for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_imgs_num)):
-                    if iter != []:
-                        if iter[-1] >= curr_rung:
-                            if curr_rung_idx == 0:
-                                rung_score_list.append(trial_result[curr_rung_idx])
-                            else:
-                                if mode == 'max':
-                                    rung_score_list.append(max(trial_result[:curr_rung_idx]))
+                print(f"[DEBUG-HPO] curr_rung = {curr_rung}")
+                for trial, (scores, num_imgs) in enumerate(list(zip(hpo_trial_results_scores, hpo_trial_results_imgs_num))):
+                    if num_imgs != []:
+                        print(f"[DEBUG-HPO] trial{trial} score reported @ {num_imgs}")
+                        if num_imgs[-1] > curr_rung:
+                            result_idx = -1
+                            for img_idx, img in enumerate(num_imgs):
+                                if img > curr_rung:
+                                    break
+                                result_idx = img_idx
+                            if result_idx != -1:
+                                if result_idx == 0:
+                                    rung_score_list.append(scores[result_idx])
                                 else:
-                                    rung_score_list.append(min(trial_result[:curr_rung_idx]))
+                                    if mode == 'max':
+                                        rung_score_list.append(max(scores[:result_idx]))
+                                    else:
+                                        rung_score_list.append(min(scores[:result_idx]))
                         else:
-                            trial_result.clear()
-                            iter.clear()
+                            print(f"[DEBUG-HPO] cannot find matched result index ({curr_rung}) in {trial} : {num_imgs}. removed")
+                            scores.clear()
+                            num_imgs.clear()
 
                 if len(rung_score_list) > 1:
                     print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
@@ -491,29 +507,31 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                     else:
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 / rf) * 100)
                     print(f"[DEBUG-HPO] cut_off_score = {cutt_off_score}")
-                    # print(f"[DEBUG-HPO] hpo_trial_results/images# = {hpo_trial_results}/{hpo_trial_results_imgs_num}")
-                    for trial_result, iter in list(zip(hpo_trial_results, hpo_trial_results_imgs_num)):
-                        if iter != []:
-                            if iter[-1] >= curr_rung:
-                                if curr_rung_idx == 0:
-                                    target_score = trial_result[curr_rung_idx]
+                    for scores, num_imgs in list(zip(hpo_trial_results_scores, hpo_trial_results_imgs_num)):
+                        if num_imgs != []:
+                            # if num_imgs[-1] > curr_rung:
+                            result_idx = -1
+                            for img_idx, img in enumerate(num_imgs):
+                                if img > curr_rung:
+                                    break
+                                result_idx = img_idx
+                            if result_idx != -1:
+                                if result_idx == 0:
+                                    target_score = scores[result_idx]
                                 else:
-                                    target_score = max(trial_result[:curr_rung_idx]) if mode == 'max' else min(trial_result[:curr_rung_idx])
-                                print(f"[DEBUG-HPO] target score = {target_score}")
+                                    target_score = max(scores[:result_idx]) if mode == 'max' else min(scores[:result_idx])
+                                # print(f"[DEBUG-HPO] target score = {target_score}")
                                 if mode == 'max':
                                     if target_score < cutt_off_score:
-                                        trial_result.clear()
-                                        iter.clear()
+                                        scores.clear()
+                                        num_imgs.clear()
                                 else:
                                     if target_score > cutt_off_score:
-                                        trial_result.clear()
-                                        iter.clear()
-                else:
-                    break
-            else:
-                break
-    # print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
+                                        scores.clear()
+                                        num_imgs.clear()
+            # print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
     if len(rung_score_list) > 1:
+        print(f"[DEBUG-HPO] last rung_score_list = {rung_score_list}")
         rf = hpo_status['reduction_factor']
 
         if mode == 'max':
@@ -614,9 +632,9 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
 
                 if cutoff_score is not None:
                     if config['mode'] == 'min':
-                        curr_best_score = min(trial_results['scores'][:rung_iter_idx])
+                        curr_best_score = min(trial_results['scores'])
                     else:
-                        curr_best_score = max(trial_results['scores'][:rung_iter_idx])
+                        curr_best_score = max(trial_results['scores'])
 
                     stop_flag = False
 

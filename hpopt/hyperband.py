@@ -202,9 +202,9 @@ class AsyncHyperBand(HpOpt):
         # Initialize the brackets
         self.rungs_in_brackets = []
         for s in range(self._num_brackets):
-            self.rungs_in_brackets.append(self.get_rungs(self.n_imgs_for_min_train,
-                                                         self.n_imgs_for_full_train,
-                                                         self._reduction_factor, s))
+            self.rungs_in_brackets.append(get_rungs(self.n_imgs_for_min_train,
+                                                    self.n_imgs_for_full_train,
+                                                    self._reduction_factor, s))
 
         # Get the max rung iterations
         # self.max_rung = 1
@@ -283,7 +283,8 @@ class AsyncHyperBand(HpOpt):
         self.save_results()
 
     # Get the list of iteration numbers for rungs in the bracket
-    def get_rungs(self, min_t: int, max_t: int, rf: int, s: int):
+    @staticmethod
+    def get_rungs(min_t: int, max_t: int, rf: int, s: int):
         MAX_RUNGS = int(log(max_t - min_t + 1) / log(rf) - s + 1)
         rungs = [(min_t - 1) + rf**(k + s) for k in reversed(range(MAX_RUNGS))]
 
@@ -572,7 +573,7 @@ class AsyncHyperBand(HpOpt):
             print(f"[DEBUG-HPO] (before) max_num_images_in_trials: {max_num_images_in_trials}")
 
             if max_num_images_in_trials > 0:
-                rungs = self.get_rungs(
+                rungs = get_rungs(
                     max_t=n_imgs_for_full_train,
                     min_t=n_imgs_for_min_train,
                     rf=reduction_factor,
@@ -638,7 +639,7 @@ class AsyncHyperBand(HpOpt):
         num_trials_in_brackets[0] += (num_trials - sum(num_trials_in_brackets))
 
         for s, num_trials in enumerate(num_trials_in_brackets):
-            rungs = self.get_rungs(n_imgs_min_train, n_imgs_full_train, reduction_factor, s)
+            rungs = get_rungs(n_imgs_min_train, n_imgs_full_train, reduction_factor, s)
             remained_trials = num_trials
             for rung in reversed(rungs):
                 num_stop_trials = remained_trials - (remained_trials // reduction_factor)
