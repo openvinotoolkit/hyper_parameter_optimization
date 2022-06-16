@@ -1,0 +1,3 @@
+.. toctree::
+    pause.md
+    standard.md

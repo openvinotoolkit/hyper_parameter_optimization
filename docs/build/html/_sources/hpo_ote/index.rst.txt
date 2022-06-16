@@ -1,0 +1,7 @@
+.. toctree::
+   :maxdepth: 3
+   :caption: hpo_ote:
+   hpo_ote/hpo_ote.md
+   hpo_ote/hpo_config.md
+   hpo_ote/cls_tutorial.md
+   hpo_ote/det_tutorial.md

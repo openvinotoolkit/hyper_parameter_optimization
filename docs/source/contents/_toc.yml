@@ -1,0 +1,17 @@
+# Table of content
+# Learn more at https://jupyterbook.org/customize/toc.html
+#
+- file: intro
+- file: install
+- file: getting_started
+- file: using
+- file: flowchart
+  sections:
+    - file: standard
+    - file: pause
+- file: apis
+- file: hpo_ote
+  sections:
+    - file: hpo_config
+    - file: cls_tutorial
+    - file: det_tutorial
