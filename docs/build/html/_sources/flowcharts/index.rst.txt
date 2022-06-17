@@ -1,6 +1,0 @@
-.. toctree::
-   :maxdepth: 3
-   :caption: flowcharts:
-   flowcharts/flowchart.md
-   flowcharts/standard.md
-   flowcharts/pause.md
