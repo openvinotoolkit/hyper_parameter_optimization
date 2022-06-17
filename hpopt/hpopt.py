@@ -68,6 +68,9 @@ class SearchSpace:
         else:
             raise TypeError(f'{self.type} is an unknown search space type.')
 
+    def __repr__(self):
+        return f"type: {self.type}, range: {self.range}"
+
     def lower_space(self):
         if self.type == "loguniform":
             return math.log(self.range[0], self.range[2])
