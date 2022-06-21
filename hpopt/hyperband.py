@@ -651,15 +651,14 @@ class AsyncHyperBand(HpOpt):
 
     def get_progress(self):
         # num images based progress
-        image_progress = min(self.get_num_trained_images() / self.num_trained_images, 0.99)
+        image_progress = min(self.get_num_trained_images() / self._expected_total_images, 0.99)
         # trial based progress
         finished_trials = sum([val['status'] == hpopt.Status.STOP
                     for val in self.hpo_status['config_list']])
         trial_progress = finished_trials / self.num_trials
 
         # return min(0.99, max(epoch_progress, trial_progress))
-        print(f"[DEBUG-HPO] get_progress() iter = {iter_progress}/{self.num_trained_images}"
+        print(f"[DEBUG-HPO] get_progress() iter = {image_progress}/{self._expected_total_images}"
               f", trial {trial_progress}/{self.num_trials}")
 
-        return min(0.99, max(iter_progress, trial_progress))
-
+        return min(0.99, max(image_progress, trial_progress))
