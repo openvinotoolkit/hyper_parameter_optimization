@@ -2,19 +2,18 @@ import logging
 import os
 import sys
 
+__all__ = ["config_logger", "get_log_dir", "get_logger"]
 
-__all__ = ['config_logger', 'get_log_dir', 'get_logger']
-
-_LOGGING_FORMAT = '%(asctime)s | %(levelname)s : %(message)s'
+_LOGGING_FORMAT = "%(asctime)s | %(levelname)s : %(message)s"
 _LOG_DIR = None
 _FILE_HANDLER = None
 _CUSTOM_LOG_LEVEL = 31
 
-logging.addLevelName(_CUSTOM_LOG_LEVEL, 'LOG')
+logging.addLevelName(_CUSTOM_LOG_LEVEL, "LOG")
 
 
 def _get_logger():
-    logger = logging.getLogger('hpopt')
+    logger = logging.getLogger("hpopt")
     logger.propagate = False
 
     def print(message, *args, **kws):
@@ -24,7 +23,7 @@ def _get_logger():
     logger.print = print
 
     default_log_level = None
-    env_setting = os.environ.get('HPOPT_LOG_LEVEL')
+    env_setting = os.environ.get("HPOPT_LOG_LEVEL")
     if env_setting is not None:
         default_log_level = logging._nameToLevel.get(env_setting)
     if default_log_level is None:
@@ -42,14 +41,22 @@ def _get_logger():
 _logger = _get_logger()
 
 # to expose supported APIs
-_override_methods = ['setLevel', 'addHandler', 'addFilter', 'info',
-                     'warning', 'error', 'critical', 'print']
+_override_methods = [
+    "setLevel",
+    "addHandler",
+    "addFilter",
+    "info",
+    "warning",
+    "error",
+    "critical",
+    "print",
+]
 for fn in _override_methods:
     locals()[fn] = getattr(_logger, fn)
     __all__.append(fn)
 
 
-def config_logger(log_file, level='WARNING'):
+def config_logger(log_file, level="WARNING"):
     global _LOG_DIR, _FILE_HANDLER
     if _FILE_HANDLER is not None:
         _logger.removeHandler(_FILE_HANDLER)
@@ -57,7 +64,7 @@ def config_logger(log_file, level='WARNING'):
 
     _LOG_DIR = os.path.dirname(log_file)
     os.makedirs(_LOG_DIR, exist_ok=True)
-    file = logging.FileHandler(log_file, mode='w', encoding='utf-8')
+    file = logging.FileHandler(log_file, mode="w", encoding="utf-8")
     file.setFormatter(logging.Formatter(_LOGGING_FORMAT))
     _FILE_HANDLER = file
     _logger.addHandler(file)
@@ -72,8 +79,10 @@ def _get_log_level(level):
     # get level number
     level_number = logging.getLevelName(level.upper())
     if level_number not in [0, 10, 20, 30, 40, 50, _CUSTOM_LOG_LEVEL]:
-        msg = ('Log level must be one of DEBUG/INFO/WARN/ERROR/CRITICAL/LOG'
-               ', but {} is given.'.format(level))
+        msg = (
+            "Log level must be one of DEBUG/INFO/WARN/ERROR/CRITICAL/LOG"
+            ", but {} is given.".format(level)
+        )
         raise ValueError(msg)
 
     return level_number
@@ -92,7 +101,7 @@ def debug(message, *args, **kws):
 
 def get_logger(rank=-1):
     if rank is None or rank > 0:
-        return _DummyLogger('dummy')
+        return _DummyLogger("dummy")
     return _logger
 
 
