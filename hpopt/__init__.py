@@ -2,24 +2,36 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from .hpo_main import report, reportOOM, create, createHpoDataset, load_json, createDummyOpt
-from .hpo_main import search_space, Status, get_current_status, get_previous_status
-from .hpo_main import get_status_path, get_trial_path, get_best_score, finalize_trial
-
+from .hpopt import (
+    SearchSpace,
+    Status,
+    create,
+    createDummyOpt,
+    createHpoDataset,
+    finalize_trial,
+    get_best_score,
+    get_current_status,
+    get_previous_status,
+    get_status_path,
+    get_trial_path,
+    load_json,
+    report,
+    reportOOM,
+)
 
 __all__ = [
-        "report",
-        "reportOOM",
-        "get_current_status",
-        "get_previous_status",
-        "create",
-        "createHpoDataset",
-        "createDummyOpt",
-        "search_space",
-        "Status",
-        "get_status_path",
-        "get_trial_path",
-        "get_best_score",
-        "finalize_trial",
-        "load_json"
-        ]
+    "report",
+    "reportOOM",
+    "get_current_status",
+    "get_previous_status",
+    "create",
+    "createHpoDataset",
+    "createDummyOpt",
+    "SearchSpace",
+    "Status",
+    "get_status_path",
+    "get_trial_path",
+    "get_best_score",
+    "finalize_trial",
+    "load_json",
+]

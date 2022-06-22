@@ -34,12 +34,12 @@ def my_trainer(config):
         if retval == hpopt.Status.STOP:
             break
 
-def test_bayes_opt():
-    hp_configs = {'a': hpopt.search_space("uniform", [-5, 10]),
-                  'b': hpopt.search_space("quniform", [2, 14, 2]),
-                  'c': hpopt.search_space("loguniform", [0.0001, 0.1]),
-                  'd': hpopt.search_space("qloguniform", [2, 256, 2]),
-                  'e': hpopt.search_space("choice", [98, 765, 4, 321])}
+def _test_bayes_opt():
+    hp_configs = {'a': hpopt.SearchSpace("uniform", [-5, 10]),
+                  'b': hpopt.SearchSpace("quniform", [2, 14, 2]),
+                  'c': hpopt.SearchSpace("loguniform", [0.0001, 0.1]),
+                  'd': hpopt.SearchSpace("qloguniform", [2, 256, 2]),
+                  'e': hpopt.SearchSpace("choice", [98, 765, 4, 321])}
     
     assert len(hp_configs) == 5
 

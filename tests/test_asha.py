@@ -23,8 +23,8 @@ def my_trainer(config):
             break
 
 def test_asha():
-    hp_configs = {"width": hpopt.search_space("uniform", [10, 100]),
-                  "height": hpopt.search_space("uniform", [0, 100])}
+    hp_configs = {"width": hpopt.SearchSpace("uniform", [10, 100]),
+                  "height": hpopt.SearchSpace("uniform", [0, 100])}
     
     my_hpo = hpopt.create(save_path='./tmp/unittest',
                           search_alg="asha",
@@ -39,7 +39,7 @@ def test_asha():
                           num_full_iterations=20,
                           full_dataset_size=1000)
 
-    assert type(my_hpo) == hpopt.asha.AsyncHyperBand
+    assert type(my_hpo) == hpopt.hyperband.AsyncHyperBand
 
     config = my_hpo.get_next_sample()
 
