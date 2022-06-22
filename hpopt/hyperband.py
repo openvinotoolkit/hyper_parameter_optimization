@@ -4,16 +4,17 @@
 
 import json
 import os
-from math import ceil, log, floor
-import logging
-from typing import Optional, Union, List, Dict
+from math import ceil, floor, log
+from typing import Dict, List, Optional, Union
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
-from hpopt.base import HpOpt
 import hpopt
+from hpopt.base import HpOpt
+from hpopt.logger import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger()
 
 
 class AsyncHyperBand(HpOpt):
@@ -67,22 +68,10 @@ class AsyncHyperBand(HpOpt):
         self._expected_total_images = 0
         self._use_epoch = use_epoch
         self._updatable_schedule = False
-        # self.hpo_status = {}
-
-        # self.median_batch_size = floor((
-        #     self.search_space[self.batch_size_name].lower_space() + self.search_space[self.batch_size_name].upper_space()) / 2)
-        # print(f"[DEBUG-HPO] median of batch size = {self.median_batch_size} "
-        #       f"[{self.search_space[self.batch_size_name].lower_space()}, {self.search_space[self.batch_size_name].upper_space()}]")
-        # self.median_batch_size = floor((
-        #     self.search_space[self.batch_size_name].range[0] + self.search_space[self.batch_size_name].range[1]) / 2)
-        # print(f"[DEBUG-HPO] median of batch size = {self.median_batch_size} "
-        #       f"[{self.search_space[self.batch_size_name].range[0]}, {self.search_space[self.batch_size_name].range[1]}]")
-        # if self.median_batch_size > self.full_dataset_size:
-        #     print(f"[DEBUG-HPO] batch size is bigger than size of training dataset. adjusted.")
-        #     self.median_batch_size = self.full_dataset_size
 
         # HPO auto configurator
         if self.num_trials is None or self.max_iterations is None or self.subset_ratio is None:
+            logger.info("training schedule was not specified for HPO. run auto configuration.")
             self._updatable_schedule = True
             self.num_trials, self.max_iterations, self.subset_ratio, \
                 self._expected_total_images, self._num_brackets, self._min_iterations, \
@@ -97,7 +86,7 @@ class AsyncHyperBand(HpOpt):
                                     parallelism=self.num_workers,
                                     min_epochs=self._min_iterations,
                                     max_epochs=self.max_iterations)
-            print(f"[DEBUG-HPO] AsyncHyperBand.__init__() num_trials : {self.num_trials}, min_iterations : {self._min_iterations}, "
+            logger.debug(f"AsyncHyperBand.__init__() num_trials : {self.num_trials}, min_iterations : {self._min_iterations}, "
                   f"max_iterations : {self.max_iterations}, subset_ratio {self.subset_ratio}, "
                   f"n_imgs_for_min_train: {self.n_imgs_for_min_train}, n_imgs_for_full_train: {self.n_imgs_for_full_train}, "
                   f"expected_total_images : {self._expected_total_images}, num_brackets: {self._num_brackets}")
@@ -117,6 +106,10 @@ class AsyncHyperBand(HpOpt):
 
             self.n_imgs_for_full_train = self.full_dataset_size * self.subset_ratio * self.max_iterations
             self.n_imgs_for_min_train = self.full_dataset_size * self.subset_ratio * self._min_iterations
+
+            if self._min_iterations > self.max_iterations:
+                logger.info("min_epochs should be less than or equal to max_epochs.")
+                self._min_iterations = self.max_iterations
 
         # Initialize a bayesopt optimizer.
         # It will be used for generating trials.
@@ -318,7 +311,7 @@ class AsyncHyperBand(HpOpt):
         # Check total number of trained images
         if self._expected_total_images > 0:
             num_trained_images = self.get_num_trained_images()
-            print(f"[DEBUG-HPO] expected total images = {self._expected_total_images} "
+            logger.debug(f"expected total images = {self._expected_total_images} "
                   f"num_images = {num_trained_images}")
             if num_trained_images >= self._expected_total_images:
                 return None
@@ -386,8 +379,7 @@ class AsyncHyperBand(HpOpt):
 
         # If the current schedule is updatable, adjust it regarding to the latest information
         if self._updatable_schedule is True:
-            # logger.debug("asha update-config start")
-            print("[DEBUG-HPO] hyperband update-config start")
+            logger.info("updating schedule")
 
             _, _, _, new_expected_total_images, _, _, _, _  = self.auto_config(
                 expected_time_ratio=self.expected_time_ratio,
@@ -400,7 +392,7 @@ class AsyncHyperBand(HpOpt):
                 parallelism=self.num_workers,
                 min_epochs=self._min_iterations,
                 max_epochs=self.max_iterations)
-            print(f"[DEBUG-HPO] updated expected total images from {self._expected_total_images} "
+            logger.debug(f"updated expected total images from {self._expected_total_images} "
                   f"to {new_expected_total_images}")
             self._expected_total_images = new_expected_total_images
 
@@ -500,8 +492,8 @@ class AsyncHyperBand(HpOpt):
         if reduction_factor is None:
             reduction_factor = 2
 
-        print(
-            f"[DEBUG-HPO] called auto_config(expected_time_ratio = {expected_time_ratio}, "
+        logger.debug(
+            f"called auto_config(expected_time_ratio = {expected_time_ratio}, "
             f"num_full_epochs = {num_full_epochs}, "
             f"full_dataset_size = {full_dataset_size}, "
             f"subset_ratio = {subset_ratio}, "
@@ -533,7 +525,8 @@ class AsyncHyperBand(HpOpt):
             min_epochs = 1
 
         if min_epochs > max_epochs:
-            raise ValueError("min_epochs should be less than or equal to max_epochs.")
+            logger.info("min_epochs should be less than or equal to max_epochs.")
+            min_epochs = max_epochs
 
         if subset_ratio is None:
             # Default subset ratio is 0.2
@@ -550,12 +543,12 @@ class AsyncHyperBand(HpOpt):
 
         n_imgs_for_full_train = int(full_dataset_size * max_epochs * subset_ratio)
         n_imgs_for_min_train = int(full_dataset_size * min_epochs * subset_ratio)
-        print(f"[DEBUG-HPO] n_imgs_for_full_train = {n_imgs_for_full_train}, "
+        logger.debug(f"n_imgs_for_full_train = {n_imgs_for_full_train}, "
               f"n_imgs_for_min_train = {n_imgs_for_min_train}")
 
-        num_trials = 0
-        num_brackets = 1
-        current_time_ratio = expected_time_ratio * 0.5
+        # num_trials = 0
+        # num_brackets = 1
+        # current_time_ratio = expected_time_ratio * 0.5
 
         # Update num_full_images from previous trials
         max_num_images_in_trials = 0
@@ -570,7 +563,7 @@ class AsyncHyperBand(HpOpt):
                         if n_images[-1] > max_num_images_in_trials:
                             max_num_images_in_trials = n_images[-1]
 
-            print(f"[DEBUG-HPO] (before) max_num_images_in_trials: {max_num_images_in_trials}")
+            logger.debug(f"(before) max_num_images_in_trials: {max_num_images_in_trials}")
 
             if max_num_images_in_trials > 0:
                 rungs = self.get_rungs(
@@ -590,18 +583,20 @@ class AsyncHyperBand(HpOpt):
                     if rung > max_num_images_in_trials:
                         n_imgs_for_full_train = rung
                         break
-            print(f"[DEBUG-HPO] (after) new n_imgs_for_full_train:{n_imgs_for_full_train}")
+            logger.debug(f"(after) new n_imgs_for_full_train:{n_imgs_for_full_train}")
 
         # 2. Update the target parameters iteratively
-        while current_time_ratio < expected_time_ratio:
-            num_trials = num_trials + 1
-            num_total_images = self.get_total_n_images(num_trials, reduction_factor,
-                                                   num_brackets, n_imgs_for_min_train, n_imgs_for_full_train)
+        num_brackets = 1
+        num_trials, num_total_images = self._calc_total_budget(num_brackets,
+                                                               expected_time_ratio,
+                                                               reduction_factor,
+                                                               n_imgs_for_min_train,
+                                                               n_imgs_for_full_train,
+                                                               subset_ratio,
+                                                               non_pure_train_ratio,
+                                                               parallelism)
 
-            current_time_ratio = num_total_images / n_imgs_for_full_train / parallelism * \
-                ((1 - non_pure_train_ratio) * subset_ratio + non_pure_train_ratio)
-
-        print(f"[DEBUG-HPO] auto_config() results: num_trials ={num_trials}, "
+        logger.debug(f"auto_config() results: num_trials ={num_trials}, "
               f"max_epochs = {max_epochs}, min_epochs = {min_epochs}, "
               f"n_imgs_for_full_train {n_imgs_for_full_train}, "
               f"n_imgs_for_min_train = {n_imgs_for_min_train}, "
@@ -619,6 +614,26 @@ class AsyncHyperBand(HpOpt):
             n_imgs_for_full_train
         )
 
+    def _calc_total_budget(self,
+                           num_brackets,
+                           time_ratio,
+                           reduction_factor,
+                           resource_min,
+                           resource_max,
+                           subset_ratio,
+                           non_trainset_ratio,
+                           parallelism):
+        num_trials = 0
+        current_time_ratio = time_ratio * 0.5
+        while current_time_ratio < time_ratio:
+            num_trials = num_trials + 1
+            num_total_images = self.get_total_n_images(num_trials, reduction_factor,
+                                                   num_brackets, resource_min, resource_max)
+
+            current_time_ratio = num_total_images / resource_max / parallelism * \
+                ((1 - non_trainset_ratio) * subset_ratio + non_trainset_ratio)
+        return num_trials, num_total_images
+
     def get_total_n_images(self,
                            num_trials: int,
                            reduction_factor: int,
@@ -628,7 +643,7 @@ class AsyncHyperBand(HpOpt):
         num_total_images = 0
 
         num_trials_in_brackets = self.get_num_trials_in_brackets(reduction_factor, num_brackets)
-        # print(f"[DEBUG-HPO] num_trials_in_brackets = {num_trials_in_brackets}")
+        # logger.debug(f"num_trials_in_brackets = {num_trials_in_brackets}")
 
         brackets_total = sum(num_trials_in_brackets)
         brackets_ratio = [float(b / brackets_total) for b in num_trials_in_brackets]
@@ -658,7 +673,7 @@ class AsyncHyperBand(HpOpt):
         trial_progress = finished_trials / self.num_trials
 
         # return min(0.99, max(epoch_progress, trial_progress))
-        print(f"[DEBUG-HPO] get_progress() iter = {image_progress}/{self._expected_total_images}"
+        logger.debug(f"get_progress() iter = {image_progress}/{self._expected_total_images}"
               f", trial {trial_progress}/{self.num_trials}")
 
         return min(0.99, max(image_progress, trial_progress))

@@ -3,11 +3,14 @@
 #
 
 import math
-import logging
+# import logging
 import time
 from typing import Optional, Union, List
 
-logger = logging.getLogger(__name__)
+from hpopt.logger import get_logger
+
+
+logger = get_logger()
 
 
 class HpOpt:

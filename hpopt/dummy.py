@@ -4,12 +4,13 @@
 
 import json
 import os
-import logging
 
-from hpopt.base import HpOpt
 import hpopt
+from hpopt.base import HpOpt
+from hpopt.logger import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger()
 
 
 class DummyOpt(HpOpt):

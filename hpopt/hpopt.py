@@ -4,7 +4,6 @@
 
 import glob
 import json
-import logging
 import math
 import os
 import time
@@ -18,12 +17,13 @@ from torch.utils.data import random_split
 from torchvision import transforms
 
 import hpopt
-# from hpopt.asha import AsyncHyperBand
 from hpopt.hyperband import AsyncHyperBand
 from hpopt.dummy import DummyOpt
 from hpopt.smbo import BayesOpt
+from hpopt.logger import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger()
 
 
 class SearchSpace:
@@ -196,8 +196,8 @@ def create(full_dataset_size: int,
         default_hyper_parameters (List[Dict] or Dict): default hyper-parameters.
         use_epoch (bool): use epoch unit instead of epoch.
     """
+    logger.info(f"creating hpopt instance with {search_alg} algo")
     os.makedirs(save_path, exist_ok=True)
-    print("[DEBUG-HPO] create()")
     if resume is False:
         status_path = get_status_path(save_path)
         if os.path.exists(status_path):
@@ -440,7 +440,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
         _rung_list (list): list of rungs in the current bracket
         mode (str): max or min. Decide whether to find max value or min value.
     """
-    print(f"[DEBUG-HPO] get_cutoff_score({target_rung}, {_rung_list}, {mode})")
+    logger.debug(f"get_cutoff_score({target_rung}, {_rung_list}, {mode})")
     status_file_path = get_status_path(save_path)
     if not os.path.exists(status_file_path):
         print(f"not existed status json file {status_file_path}")
@@ -472,7 +472,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
     rung_score_list = []
     rung_list = _rung_list.copy()
     rung_list.sort(reverse=False)
-    print(f"[DEBUG-HPO] rung_list = {rung_list}")
+    logger.debug(f"rung_list = {rung_list}")
     if len(hpo_trial_results_scores) > 1:
         rf = hpo_status['reduction_factor']
 
@@ -480,10 +480,10 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
         for curr_rung in rung_list:
             if curr_rung <= target_rung:
                 rung_score_list.clear()
-                print(f"[DEBUG-HPO] curr_rung = {curr_rung}")
+                logger.debug(f"curr_rung = {curr_rung}")
                 for trial, (scores, num_imgs) in enumerate(list(zip(hpo_trial_results_scores, hpo_trial_results_imgs_num))):
                     if num_imgs != []:
-                        print(f"[DEBUG-HPO] trial{trial} score reported @ {num_imgs}")
+                        logger.debug(f"trial{trial} score reported @ {num_imgs}")
                         if num_imgs[-1] > curr_rung:
                             result_idx = -1
                             for img_idx, img in enumerate(num_imgs):
@@ -499,17 +499,17 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                                     else:
                                         rung_score_list.append(min(scores[:result_idx]))
                         else:
-                            print(f"[DEBUG-HPO] cannot find matched result index ({curr_rung}) in {trial} : {num_imgs}. removed")
+                            logger.debug(f"cannot find matched result index ({curr_rung}) in {trial} : {num_imgs}. removed")
                             scores.clear()
                             num_imgs.clear()
 
                 if len(rung_score_list) > 1:
-                    print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
+                    logger.debug(f"rung_score_list = {rung_score_list}")
                     if mode == 'max':
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
                     else:
                         cutt_off_score = np.nanpercentile(rung_score_list, (1 / rf) * 100)
-                    print(f"[DEBUG-HPO] cut_off_score = {cutt_off_score}")
+                    logger.debug(f"cut_off_score = {cutt_off_score}")
                     for scores, num_imgs in list(zip(hpo_trial_results_scores, hpo_trial_results_imgs_num)):
                         if num_imgs != []:
                             # if num_imgs[-1] > curr_rung:
@@ -523,7 +523,7 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                                     target_score = scores[result_idx]
                                 else:
                                     target_score = max(scores[:result_idx]) if mode == 'max' else min(scores[:result_idx])
-                                # print(f"[DEBUG-HPO] target score = {target_score}")
+                                # logger.debug(f"target score = {target_score}")
                                 if mode == 'max':
                                     if target_score < cutt_off_score:
                                         scores.clear()
@@ -532,18 +532,18 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
                                     if target_score > cutt_off_score:
                                         scores.clear()
                                         num_imgs.clear()
-            # print(f"[DEBUG-HPO] rung_score_list = {rung_score_list}")
+            # logger.debug(f"rung_score_list = {rung_score_list}")
     if len(rung_score_list) > 1:
-        print(f"[DEBUG-HPO] last rung_score_list = {rung_score_list}")
+        logger.debug(f"last rung_score_list = {rung_score_list}")
         rf = hpo_status['reduction_factor']
 
         if mode == 'max':
             ret = np.nanpercentile(rung_score_list, (1 - 1 / rf) * 100)
-            print(f"[DEBUG-HPO] return {ret}")
+            logger.debug(f"return {ret}")
             return ret
         else:
             ret = np.nanpercentile(rung_score_list, (1 / rf) * 100)
-            print(f"[DEBUG-HPO] return {ret}")
+            logger.debug(f"return {ret}")
             return ret
 
     return None
@@ -560,7 +560,7 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
         score (float): score of every epoch during trial.
         current_iters (int): current iteration number when the given score was generated.
     """
-    print(f"[DEBUG-HPO] report({config})")
+    logger.debug(f"report({config})")
     if os.path.exists(config['file_path']):
         with open(config['file_path'], 'rt') as json_file:
             trial_results = json.load(json_file)
@@ -577,7 +577,7 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
         sum(trial_results['scores'])/len(trial_results['scores']))
 
     batch_size = config['params'].get(config['batch_size_param_name'])
-    print(f"[DEBUG-HPO] report() batch size of this trial = {batch_size}")
+    logger.debug(f"report() batch size of this trial = {batch_size}")
     if batch_size is None:
         batch_size = config.get('batch_size')
     if batch_size is None:
@@ -618,7 +618,7 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
                 trial_results['status'] = Status.STOP
                 # logger.debug(f"median stop is executed. median score : {median_score} / "
                 #              f"current best score : {curr_best_score}")
-                print(f"[DEBUG-HPO] median stop is executed. median score : {median_score} / "
+                logger.debug(f"median stop is executed. median score : {median_score} / "
                       f"current best score : {curr_best_score}")
 
     elif 'rungs' in config:
@@ -626,7 +626,7 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
         save_path = os.path.dirname(config['file_path'])
         # curr_itr = len(trial_results['scores'])
         curr_itr = trial_results['images'][-1]
-        print(f"[DEBUG-HPO] current iterations = {curr_itr} : {config['rungs']}")
+        logger.debug(f"current iterations = {curr_itr} : {config['rungs']}")
 
         for rung_iter_idx, rung_itr in enumerate(config['rungs']):
             if curr_itr >= rung_itr:
@@ -648,7 +648,7 @@ def report(config: Dict[str, Any], score: float, current_iters: Optional[int] = 
 
                     if stop_flag:
                         trial_results['status'] = Status.STOP
-                        print(f"[DEBUG-HPO] [ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
+                        logger.debug(f"[ASHA STOP] [{config['trial_id']}, {curr_itr}, {rung_itr}] "
                               f"{cutoff_score} > {curr_best_score}")
                         break
 

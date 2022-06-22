@@ -4,15 +4,16 @@
 
 import json
 import os
-import logging
 from typing import Optional, Union, Dict, List
 
 from bayes_opt import BayesianOptimization, UtilityFunction
 
 from hpopt.base import HpOpt
 import hpopt
+from hpopt.logger import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger()
 
 
 class BayesOpt(HpOpt):
