@@ -1,0 +1,54 @@
+default_language_version:
+  python: python3.8
+
+repos:
+  - repo: https://github.com/PyCQA/isort
+    rev: "5.9.2"
+    hooks:
+      - id: isort
+        alias: isort_ote_sdk
+        name: "isort (hpopt)"
+        args: ["--settings", ".isort.cfg"]
+        files: '^hpopt/.*\.py'
+
+  - repo: https://github.com/psf/black
+    rev: 22.3.0
+    hooks:
+      - id: black
+        name: "black (hpopt)"
+        args: [--line-length, "88"]
+        files: '^(hpopt)/.*\.py'
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: "4.0.1"
+    hooks:
+      - id: flake8
+        name: "flake8"
+        files: '^(hpopt)/.*\.py'
+        args: ["--config", ".flake8", "--max-complexity", "20"]
+
+  # yaml formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v2.3.0
+    hooks:
+      - id: prettier
+        types: [yaml]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v0.812"
+    hooks:
+      - id: mypy
+        alias: mypy_hpopt
+        name: "mypy (hpopt)"
+        files: '^hpopt/.*\.py'
+        args: ["--config-file=.mypy.ini"]
+
+  - repo: local
+    hooks:
+      - id: pylint
+        name: "pylint"
+        files: '^(hpopt)/.*\.py'
+        entry: pylint
+        language: system
+        types: [python]
+        args: ["--score=no", "--rcfile=.pylintrc"]

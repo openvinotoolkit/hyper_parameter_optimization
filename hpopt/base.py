@@ -3,11 +3,14 @@
 #
 
 import math
-import logging
-import time
-from typing import Optional, Union, List
 
-logger = logging.getLogger(__name__)
+# import logging
+import time
+from typing import List, Optional, Union
+
+from hpopt.logger import get_logger
+
+logger = get_logger()
 
 
 class HpOpt:
@@ -45,94 +48,113 @@ class HpOpt:
                        If HPO completed, you can just use optimized hyper parameters.
                        If HPO stopped in middle, you can resume in middle.
     """
-    def __init__(self,
-                 search_space: List,
-                 save_path: str = None,
-                 mode: str = 'max',
-                 num_init_trials: int = 5,
-                 num_trials: Optional[int] = None,
-                 num_workers: int = 1,
-                 num_full_iterations: int = 1,
-                 non_pure_train_ratio: float = 0.2,
-                 full_dataset_size: int = 0,
-                 metric: str = 'mAP',
-                 expected_time_ratio: Union[int, float] = 4,
-                 max_iterations: Optional[int] = None,
-                 max_time=None,
-                 resources_per_trial=None,
-                 subset_ratio: Optional[Union[float, int]] = None,
-                 min_subset_size=500,
-                 image_resize: List[int] = [0, 0],
-                 batch_size_name = None,
-                 verbose: int = 0,
-                 resume: bool = False):
 
-        if mode not in ['min', 'max']:
-            raise ValueError('\'mode\' should be one of \'min\' or \'max\'.')
+    def __init__(
+        self,
+        search_space: List,
+        save_path: str = "/tmp/hpopt",
+        mode: str = "max",
+        num_init_trials: int = 5,
+        num_trials: Optional[int] = None,
+        num_workers: int = 1,
+        num_full_iterations: int = 1,
+        non_pure_train_ratio: float = 0.2,
+        full_dataset_size: int = 0,
+        metric: str = "mAP",
+        expected_time_ratio: Union[int, float] = 4,
+        max_iterations: Optional[int] = None,
+        max_time=None,
+        resources_per_trial=None,
+        subset_ratio: Optional[Union[float, int]] = None,
+        min_subset_size=500,
+        image_resize: List[int] = [0, 0],
+        batch_size_name=None,
+        verbose: int = 0,
+        resume: bool = False,
+    ):
+
+        if mode not in ["min", "max"]:
+            raise ValueError("'mode' should be one of 'min' or 'max'.")
 
         if type(expected_time_ratio) != float and type(expected_time_ratio) != int:
             TypeError("expected_time_ratio should be float or int type.")
         elif expected_time_ratio <= 0:
-            ValueError("expected_time_ratio should be bigger than 0."
-                       f" Your value is {expected_time_ratio}")
+            ValueError(
+                "expected_time_ratio should be bigger than 0."
+                f" Your value is {expected_time_ratio}"
+            )
 
         if type(full_dataset_size) != int:
-            TypeError('full_dataset_size should be int type.')
+            TypeError("full_dataset_size should be int type.")
         elif full_dataset_size < 0:
-            ValueError('full_dataset_size should be postive value'
-                       f'Your value is {full_dataset_size}.')
+            ValueError(
+                "full_dataset_size should be postive value"
+                f"Your value is {full_dataset_size}."
+            )
 
         if type(num_full_iterations) != int:
-            TypeError('num_full_iteration should be int type.')
+            TypeError("num_full_iteration should be int type.")
         elif num_full_iterations < 1:
-            raise ValueError('num_full_iterations should be 1 <=.'
-                             f" Your value is {num_full_iterations}")
+            raise ValueError(
+                "num_full_iterations should be 1 <=."
+                f" Your value is {num_full_iterations}"
+            )
 
         if type(non_pure_train_ratio) != float:
-            TypeError('non_pure_train_ratio should be int type.')
+            TypeError("non_pure_train_ratio should be int type.")
         elif not (0 < non_pure_train_ratio < 1):
-            raise ValueError('non_pure_train_ratio should be between 0 and 1.'
-                             f' Your value is {non_pure_train_ratio}')
+            raise ValueError(
+                "non_pure_train_ratio should be between 0 and 1."
+                f" Your value is {non_pure_train_ratio}"
+            )
 
         if type(num_init_trials) != int:
-            raise TypeError('num_init_trials should be int type')
+            raise TypeError("num_init_trials should be int type")
         elif num_init_trials < 1:
-            raise ValueError('num_init_trials should be bigger than 0.'
-                             f' Your value is {num_init_trials}')
+            raise ValueError(
+                "num_init_trials should be bigger than 0."
+                f" Your value is {num_init_trials}"
+            )
 
         if max_iterations is not None:
             if type(max_iterations) != int:
-                raise TypeError('max_iterations should be int type')
+                raise TypeError("max_iterations should be int type")
             elif max_iterations < 1:
-                raise ValueError('max_iterations should be bigger than 0.'
-                                 f' Your value is {max_iterations}')
+                raise ValueError(
+                    "max_iterations should be bigger than 0."
+                    f" Your value is {max_iterations}"
+                )
 
         if num_trials is not None:
             if type(num_trials) != int:
-                raise TypeError('num_trials should be int type')
+                raise TypeError("num_trials should be int type")
             elif num_trials < 1:
-                raise ValueError('num_trials should be bigger than 0.'
-                                 f' Your value is {num_trials}')
+                raise ValueError(
+                    "num_trials should be bigger than 0." f" Your value is {num_trials}"
+                )
 
         if type(num_workers) != int:
-            raise TypeError('num_workers should be int type')
+            raise TypeError("num_workers should be int type")
         elif num_workers < 1:
-            raise ValueError('num_workers should be bigger than 0.'
-                             f' Your value is {num_workers}')
+            raise ValueError(
+                "num_workers should be bigger than 0." f" Your value is {num_workers}"
+            )
 
         if subset_ratio is not None:
             if type(subset_ratio) != float and type(subset_ratio) != int:
-                raise TypeError('subset_ratio should be float or int type')
+                raise TypeError("subset_ratio should be float or int type")
             elif not (0 < subset_ratio <= 1.0):
-                raise ValueError('subset_ratio should be > 0 and <= 1.'
-                                 f' Your value is {subset_ratio}')
+                raise ValueError(
+                    "subset_ratio should be > 0 and <= 1."
+                    f" Your value is {subset_ratio}"
+                )
 
         if not hasattr(image_resize, "__getitem__"):
-            raise TypeError('image_resize should be able to accessible by index.')
+            raise TypeError("image_resize should be able to accessible by index.")
         elif len(image_resize) < 2:
-            raise ValueError('image_resize should have at least two values.')
+            raise ValueError("image_resize should have at least two values.")
         elif image_resize[0] < 0 or image_resize[1] < 0:
-            raise ValueError('Each value of image_resize should be positive.')
+            raise ValueError("Each value of image_resize should be positive.")
 
         self.save_path = save_path
         self.search_space = search_space
@@ -152,7 +174,7 @@ class HpOpt:
         self.image_resize = image_resize
         self.verbose = verbose
         self.resume = resume
-        self.hpo_status = {}
+        self.hpo_status: dict = {}
         self.metric = metric
         self.batch_size_name = batch_size_name
 
@@ -193,28 +215,28 @@ class HpOpt:
     def print_results(self):
         field_widths = []
         field_param_name = []
-        print(f'|{"#": ^5}|', end='')
+        print(f'|{"#": ^5}|', end="")
         for param in self.search_space:
-            field_title = f'{param}'
+            field_title = f"{param}"
             filed_width = max(len(field_title) + 2, 20)
             field_widths.append(filed_width)
             field_param_name.append(param)
-            print(f'{field_title: ^{filed_width}} |', end='')
+            print(f"{field_title: ^{filed_width}} |", end="")
         print(f'{"score": ^21}|')
 
-        for trial_id, config_item in enumerate(self.hpo_status['config_list'], start=1):
-            if config_item['score'] is not None:
-                print(f'|{trial_id: >4} |', end='')
-                real_config = config_item['config']
+        for trial_id, config_item in enumerate(self.hpo_status["config_list"], start=1):
+            if config_item["score"] is not None:
+                print(f"|{trial_id: >4} |", end="")
+                real_config = config_item["config"]
                 for param, field_width in zip(field_param_name, field_widths):
-                    print(f'{real_config[param]: >{field_width}} |', end='')
-                score = config_item['score']
-                print(f'{score: >20} |', end='')
-                print('')
+                    print(f"{real_config[param]: >{field_width}} |", end="")
+                score = config_item["score"]
+                print(f"{score: >20} |", end="")
+                print("")
 
     def check_duplicated_config(self, new_config):
-        for old_item in self.hpo_status['config_list']:
-            old_config = old_item['config']
+        for old_item in self.hpo_status["config_list"]:
+            old_config = old_item["config"]
             matched = True
             for param in old_config:
                 old_value = old_config[param]
@@ -239,8 +261,8 @@ class HpOpt:
             update_try_count += 1
             update_flag = False
 
-            for config_item in self.hpo_status['config_list']:
-                if config_item['score'] is None:
+            for config_item in self.hpo_status["config_list"]:
+                if config_item["score"] is None:
                     time.sleep(1)
                     self.update_scores()
                     update_flag = True
@@ -253,28 +275,31 @@ class HpOpt:
         best_score = 0
         best_trial_id = 0
 
-        for trial_id, config_item in enumerate(self.hpo_status['config_list']):
-            if config_item['score'] is not None:
-                best_score = config_item['score']
+        for trial_id, config_item in enumerate(self.hpo_status["config_list"]):
+            if config_item["score"] is not None:
+                best_score = config_item["score"]
                 best_trial_id = trial_id
                 break
 
-        for trial_id, config_item in enumerate(self.hpo_status['config_list']):
+        for trial_id, config_item in enumerate(self.hpo_status["config_list"]):
             update_flag = False
 
-            if config_item['score'] is None:
+            if config_item["score"] is None:
                 continue
 
-            if self.mode == 'min' and config_item['score'] < best_score:
+            if self.mode == "min" and config_item["score"] < best_score:
                 update_flag = True
-            elif self.mode == 'max' and config_item['score'] > best_score:
+            elif self.mode == "max" and config_item["score"] > best_score:
                 update_flag = True
 
             if update_flag:
-                best_score = config_item['score']
+                best_score = config_item["score"]
                 best_trial_id = trial_id
 
-        self.hpo_status['best_config_id'] = best_trial_id
+        self.hpo_status["best_config_id"] = best_trial_id
         self.save_results()
 
-        return self.hpo_status['config_list'][best_trial_id]['config']
+        return self.hpo_status["config_list"][best_trial_id]["config"]
+
+    def get_progress(self):
+        pass
