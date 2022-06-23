@@ -465,7 +465,7 @@ class AsyncHyperBand(HpOpt):
                 num_trials, new_expected_total_images = self._calc_total_budget(
                     self._num_brackets, self.expected_time_ratio, self._reduction_factor,
                     self.n_imgs_for_min_train, current_best_images, self.subset_ratio, self.non_pure_train_ratio, self.num_workers)
-                logger.debug(
+                logger.info(
                     f"updated expected total images from {self._expected_total_images} "
                     f"to {new_expected_total_images}"
                 )
