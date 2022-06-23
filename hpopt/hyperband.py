@@ -76,6 +76,7 @@ class AsyncHyperBand(HpOpt):
         self._expected_total_images = 0
         self._use_epoch = use_epoch
         self._updatable_schedule = False
+        self._current_best_trial_id = -1
 
         # HPO auto configurator
         if (
@@ -409,18 +410,32 @@ class AsyncHyperBand(HpOpt):
         return new_config
 
     def update_scores(self):
+        current_best_score = 0
+        current_best_trial_id = -1
+        current_best_images = 0
         for trial_id, config_item in enumerate(self.hpo_status["config_list"]):
             if config_item["status"] == hpopt.Status.RUNNING:
                 current_status = hpopt.get_current_status(self.save_path, trial_id)
 
                 if current_status == hpopt.Status.STOP:
-                    score = hpopt.get_best_score(self.save_path, trial_id, self.mode)
+                    # score = hpopt.get_best_score(self.save_path, trial_id, self.mode)
+                    score, n_imgs = hpopt.get_best_score_with_num_imgs(self.save_path, trial_id, self.mode)
 
                     if score is not None:
                         config_item["score"] = score
                         config_item["status"] = hpopt.Status.STOP
                         real_config = config_item["config"]
                         logger.info(f"#{trial_id} | {real_config} | {score}")
+                        if self.mode == 'max':
+                            if score > current_best_score:
+                                current_best_score = score
+                                current_best_trial_id = trial_id
+                                current_best_images = n_imgs
+                        elif self.mode == 'min':
+                            if score < current_best_score:
+                                current_best_score = score
+                                current_best_trial_id = trial_id
+                                current_best_images = n_imgs
                 elif current_status == hpopt.Status.CUDAOOM:
                     config_item["status"] = hpopt.Status.READY
                     self.hpo_status["num_gen_config"] -= 1
@@ -432,30 +447,50 @@ class AsyncHyperBand(HpOpt):
 
                     # shrink search space of 'bs'
                     self.shrink_bs_search_space(config_item)
+            # elif config_time["status"] == hpopt.Status.STOP:
+            #     score, n_imgs = get_best_score_with_num_imgs(self.save_path, trial_id, self.mode)
+            #     if score > current_best_score:
+            #         current_best_score = score
+            #         current_best_trial_id = trial_id
+            #         current_best_images = n_imgs
 
         self.save_results()
 
         # If the current schedule is updatable, adjust it regarding to the latest information
         if self._updatable_schedule is True:
-            logger.info("updating schedule")
+            if current_best_trial_id != -1 and self._current_best_trial_id != current_best_trial_id:
+                logger.info("best trial changed. updating schedule...")
+                self._current_best_trial_id = current_best_trial_id
 
-            _, _, _, new_expected_total_images, _, _, _, _ = self.auto_config(
-                expected_time_ratio=self.expected_time_ratio,
-                num_full_epochs=self.num_full_iterations,
-                full_dataset_size=self.full_dataset_size,
-                subset_ratio=self.subset_ratio,
-                non_pure_train_ratio=self.non_pure_train_ratio,
-                num_hyperparams=len(self.search_space),
-                reduction_factor=self._reduction_factor,
-                parallelism=self.num_workers,
-                min_epochs=self._min_iterations,
-                max_epochs=self.max_iterations,
-            )
-            logger.debug(
-                f"updated expected total images from {self._expected_total_images} "
-                f"to {new_expected_total_images}"
-            )
-            self._expected_total_images = new_expected_total_images
+                num_trials, new_expected_total_images = self._calc_total_budget(
+                    self._num_brackets, self.expected_time_ratio, self._reduction_factor,
+                    self.n_imgs_for_min_train, current_best_images, self.subset_ratio, self.non_pure_train_ratio, self.num_workers)
+                logger.debug(
+                    f"updated expected total images from {self._expected_total_images} "
+                    f"to {new_expected_total_images}"
+                )
+                self._expected_total_images = new_expected_total_images
+
+                # _, _, _, new_expected_total_images, _, _, _, _ = self.auto_config(
+                #     expected_time_ratio=self.expected_time_ratio,
+                #     num_full_epochs=self.num_full_iterations,
+                #     full_dataset_size=self.full_dataset_size,
+                #     subset_ratio=self.subset_ratio,
+                #     non_pure_train_ratio=self.non_pure_train_ratio,
+                #     num_hyperparams=len(self.search_space),
+                #     reduction_factor=self._reduction_factor,
+                #     parallelism=self.num_workers,
+                #     min_epochs=self._min_iterations,
+                #     max_epochs=self.max_iterations,
+                # )
+                # num_trials, new_expected_total_images = self._calc_total_budget(
+                #     self._num_brackets, self.expected_time_ratio, self._reduction_factor,
+                #     self.n_imgs_for_min_train, self.n_imgs_for_full_train, self.subset_ratio, self.non_pure_train_ratio, self.num_workers)
+                # logger.debug(
+                #     f"updated expected total images from {self._expected_total_images} "
+                #     f"to {new_expected_total_images}"
+                # )
+                # self._expected_total_images = new_expected_total_images
 
     # Lower the upper bound of batch size
     def shrink_bs_search_space(self, not_allowed_config):
@@ -755,6 +790,8 @@ class AsyncHyperBand(HpOpt):
             num_trials_in_brackets[i] = int(brackets_ratio[i] * num_trials)
 
         num_trials_in_brackets[0] += num_trials - sum(num_trials_in_brackets)
+
+        # logger.debug(f"num_trials_in_brackets = {num_trials_in_brackets}")
 
         for s, num_trials in enumerate(num_trials_in_brackets):
             rungs = self.get_rungs(

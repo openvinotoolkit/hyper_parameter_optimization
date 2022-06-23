@@ -25,7 +25,7 @@ def _get_logger():
     default_log_level = None
     env_setting = os.environ.get("HPOPT_LOG_LEVEL")
     if env_setting is not None:
-        default_log_level = logging._nameToLevel.get(env_setting)
+        default_log_level = logging._nameToLevel.get(env_setting.upper())
     if default_log_level is None:
         default_log_level = logging.INFO
 

@@ -363,6 +363,31 @@ def get_best_score(save_path: str, trial_id: int, mode: str):
     return None
 
 
+def get_best_score_with_num_imgs(save_path: str, trial_id: int, mode: str):
+    """
+    get the best score of the trial.
+
+    Args:
+        save_path (str): path where result of HPO is saved.
+        tiral_id (int): order of HPO trial.
+        mode (str): max or min. Decide whether to find max value or min value.
+    """
+    trial_file_path = get_trial_path(save_path, trial_id)
+    trial_results = load_json(trial_file_path)
+
+    best_score = None
+    num_images = -1
+    if trial_results is not None:
+        if trial_results["status"] == Status.STOP:
+            if mode == "min":
+                best_score = min(trial_results["scores"])
+            else:
+                best_score = max(trial_results["scores"])
+            num_images = trial_results["images"][-1]
+
+    return best_score, num_images
+
+
 def finalize_trial(config: Dict[str, Any]):
     """
     Handles the status of trials that have terminated by unexpected causes
