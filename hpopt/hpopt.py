@@ -471,13 +471,13 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
     logger.debug(f"get_cutoff_score({target_rung}, {_rung_list}, {mode})")
     status_file_path = get_status_path(save_path)
     if not os.path.exists(status_file_path):
-        print(f"not existed status json file {status_file_path}")
+        logger.warning(f"not existed status json file {status_file_path}")
         return None
 
     hpo_status = load_json(status_file_path)
 
     if hpo_status is None:
-        print(f"failed to load json file {status_file_path}")
+        logger.warning(f"failed to load json file {status_file_path}")
         return None
 
     # Gather all scores with iter number
@@ -497,8 +497,8 @@ def get_cutoff_score(save_path: str, target_rung: int, _rung_list, mode: str):
             f"mismatch length of trial results and number of trained images {hpo_trial_results_scores}"
             f"/{hpo_trial_results_imgs_num}"
         )
-    print(f"scores = {hpo_trial_results_scores}")
-    print(f"num_imgs = {hpo_trial_results_imgs_num}")
+    logger.debug(f"scores = {hpo_trial_results_scores}")
+    logger.debug(f"num_imgs = {hpo_trial_results_imgs_num}")
     # Run a SHA (not ASHA)
     rung_score_list = []
     rung_list = _rung_list.copy()

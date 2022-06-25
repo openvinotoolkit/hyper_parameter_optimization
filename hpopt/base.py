@@ -215,24 +215,24 @@ class HpOpt:
     def print_results(self):
         field_widths = []
         field_param_name = []
-        print(f'|{"#": ^5}|', end="")
+        logger.print(f'|{"#": ^5}|', end="")
         for param in self.search_space:
             field_title = f"{param}"
             filed_width = max(len(field_title) + 2, 20)
             field_widths.append(filed_width)
             field_param_name.append(param)
             print(f"{field_title: ^{filed_width}} |", end="")
-        print(f'{"score": ^21}|')
+        logger.print(f'{"score": ^21}|')
 
         for trial_id, config_item in enumerate(self.hpo_status["config_list"], start=1):
             if config_item["score"] is not None:
-                print(f"|{trial_id: >4} |", end="")
+                logger.print(f"|{trial_id: >4} |", end="")
                 real_config = config_item["config"]
                 for param, field_width in zip(field_param_name, field_widths):
-                    print(f"{real_config[param]: >{field_width}} |", end="")
+                    logger.print(f"{real_config[param]: >{field_width}} |", end="")
                 score = config_item["score"]
-                print(f"{score: >20} |", end="")
-                print("")
+                logger.print(f"{score: >20} |", end="")
+                logger.print("")
 
     def check_duplicated_config(self, new_config):
         for old_item in self.hpo_status["config_list"]:
