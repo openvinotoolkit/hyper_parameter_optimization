@@ -376,7 +376,7 @@ class AsyncHyperBand(HpOpt):
             )
 
             if (
-                imgs_for_full_train != -1 # finished trial  finish.
+                imgs_for_full_train != -1 # finished trial finish.
                 and (self._expected_total_images * 1.2
                      < num_trained_images + imgs_for_full_train)
             ):
