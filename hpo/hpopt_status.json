@@ -1,0 +1,2805 @@
+{
+    "search_algorithm": "asha",
+    "search_space": {
+        "num": {
+            "_type": "uniform",
+            "_range": [
+                0,
+                10,
+                2
+            ]
+        }
+    },
+    "metric": "mAP",
+    "subset_ratio": 1.0,
+    "image_resize": [
+        0,
+        0
+    ],
+    "full_dataset_size": 100,
+    "reduction_factor": 2,
+    "config_list": [
+        {
+            "trial_id": 0,
+            "config": {
+                "num": 9.190785461339159
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 1,
+            "config": {
+                "num": 3.097413973751765
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 2,
+            "config": {
+                "num": 4.626790903257594
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 3,
+            "config": {
+                "num": 7.14584684482963
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 4,
+            "config": {
+                "num": 7.691122718278853
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 5,
+            "config": {
+                "num": 2.5231666074388412
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 6,
+            "config": {
+                "num": 2.4271403322583263
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 7,
+            "config": {
+                "num": 7.645726088162319
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 8,
+            "config": {
+                "num": 7.659156231300316
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 9,
+            "config": {
+                "num": 6.350931543561577
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 10,
+            "config": {
+                "num": 8.905786366166112
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 11,
+            "config": {
+                "num": 3.3000455889385694
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 12,
+            "config": {
+                "num": 6.394145010940132
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 13,
+            "config": {
+                "num": 2.540735335798492
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 14,
+            "config": {
+                "num": 9.507639669909935
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 15,
+            "config": {
+                "num": 0.7550296737496631
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 16,
+            "config": {
+                "num": 1.2407402178660754
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 17,
+            "config": {
+                "num": 5.883844470217729
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 18,
+            "config": {
+                "num": 0.4731854077362718
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 19,
+            "config": {
+                "num": 5.020015669312075
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 20,
+            "config": {
+                "num": 7.954425232050779
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 21,
+            "config": {
+                "num": 8.849398535436928
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 22,
+            "config": {
+                "num": 3.127458664689693
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 23,
+            "config": {
+                "num": 1.3036740600600405
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 24,
+            "config": {
+                "num": 3.000398445914463
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 25,
+            "config": {
+                "num": 0.2420639350784637
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 26,
+            "config": {
+                "num": 8.586667187576104
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 27,
+            "config": {
+                "num": 7.0314151583301925
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 28,
+            "config": {
+                "num": 9.65618692841225
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 29,
+            "config": {
+                "num": 5.1328172620348
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 30,
+            "config": {
+                "num": 4.823033757341769
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 31,
+            "config": {
+                "num": 2.685297032149588
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 32,
+            "config": {
+                "num": 8.067637852460514
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 33,
+            "config": {
+                "num": 2.937816878589834
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 34,
+            "config": {
+                "num": 0.8231603741911775
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 35,
+            "config": {
+                "num": 4.013031403681442
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 36,
+            "config": {
+                "num": 3.3974378027885486
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 37,
+            "config": {
+                "num": 8.915129121617177
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 38,
+            "config": {
+                "num": 2.5643946172618537
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 39,
+            "config": {
+                "num": 5.491146153691347
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 40,
+            "config": {
+                "num": 1.6926320392285954
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 41,
+            "config": {
+                "num": 9.523515834154061
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 42,
+            "config": {
+                "num": 1.521537778666836
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 43,
+            "config": {
+                "num": 4.2613421187933636
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 44,
+            "config": {
+                "num": 2.563109861227919
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 45,
+            "config": {
+                "num": 0.8010871374986228
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 46,
+            "config": {
+                "num": 2.081515884793429
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 47,
+            "config": {
+                "num": 9.528538795780523
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 48,
+            "config": {
+                "num": 0.7678490511474345
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 49,
+            "config": {
+                "num": 0.8955261022940542
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 50,
+            "config": {
+                "num": 3.374798309692444
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 51,
+            "config": {
+                "num": 0.7771328949545819
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 52,
+            "config": {
+                "num": 8.888982717054512
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 53,
+            "config": {
+                "num": 7.099119872025392
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 54,
+            "config": {
+                "num": 3.5282897790124714
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 55,
+            "config": {
+                "num": 0.14777408015121396
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 56,
+            "config": {
+                "num": 2.367017113486342
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 57,
+            "config": {
+                "num": 2.3082050199945616
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 58,
+            "config": {
+                "num": 4.452871793915758
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 59,
+            "config": {
+                "num": 7.174515358594414
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 60,
+            "config": {
+                "num": 7.504109983360671
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 61,
+            "config": {
+                "num": 8.321565598402138
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 62,
+            "config": {
+                "num": 1.8373814035623992
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 63,
+            "config": {
+                "num": 8.14363312276332
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 64,
+            "config": {
+                "num": 0.6566735442210925
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 65,
+            "config": {
+                "num": 7.111536853610464
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 66,
+            "config": {
+                "num": 5.501582341699751
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 67,
+            "config": {
+                "num": 1.0832683561356515
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 68,
+            "config": {
+                "num": 5.4512960974240965
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 69,
+            "config": {
+                "num": 6.187343032504048
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 70,
+            "config": {
+                "num": 8.09869882272887
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 71,
+            "config": {
+                "num": 2.7885893589296087
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 72,
+            "config": {
+                "num": 2.8714575075045143
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 73,
+            "config": {
+                "num": 5.7147289368461776
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 74,
+            "config": {
+                "num": 1.284185559710177
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 75,
+            "config": {
+                "num": 2.5773053050310346
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 76,
+            "config": {
+                "num": 9.556120464708469
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 77,
+            "config": {
+                "num": 1.2141001086712855
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 78,
+            "config": {
+                "num": 0.8038481365796979
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 79,
+            "config": {
+                "num": 8.475325810316622
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 80,
+            "config": {
+                "num": 8.208978129689083
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 81,
+            "config": {
+                "num": 5.133228843760133
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 82,
+            "config": {
+                "num": 5.9505547594634844
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 83,
+            "config": {
+                "num": 4.615936469101927
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 84,
+            "config": {
+                "num": 9.38837893635139
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 85,
+            "config": {
+                "num": 7.8299490095057065
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 86,
+            "config": {
+                "num": 9.280824719193346
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 87,
+            "config": {
+                "num": 6.0711586827173925
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 88,
+            "config": {
+                "num": 1.317315785421248
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 89,
+            "config": {
+                "num": 4.353744417685904
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 90,
+            "config": {
+                "num": 8.031866718094513
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 91,
+            "config": {
+                "num": 3.752003579475658
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 92,
+            "config": {
+                "num": 7.2700466502546615
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 93,
+            "config": {
+                "num": 6.861328404556323
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 94,
+            "config": {
+                "num": 9.56468287726371
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 95,
+            "config": {
+                "num": 8.707273858029929
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 96,
+            "config": {
+                "num": 2.7674173209274224
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 97,
+            "config": {
+                "num": 0.053823131136835345
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 98,
+            "config": {
+                "num": 9.753424468390657
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 99,
+            "config": {
+                "num": 3.3399605474177596
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 100,
+            "config": {
+                "num": 0.0029079084877980943
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 101,
+            "config": {
+                "num": 6.497373170406503
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 102,
+            "config": {
+                "num": 0.8991829228584458
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 103,
+            "config": {
+                "num": 4.726862945417775
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 104,
+            "config": {
+                "num": 4.644130174455235
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 105,
+            "config": {
+                "num": 4.762549771501221
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 106,
+            "config": {
+                "num": 4.354391014449166
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 107,
+            "config": {
+                "num": 1.6440700560293098
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 108,
+            "config": {
+                "num": 0.6193636570337602
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 109,
+            "config": {
+                "num": 0.1318746267154025
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 110,
+            "config": {
+                "num": 2.0863467910045532
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 111,
+            "config": {
+                "num": 0.4952512903123829
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 112,
+            "config": {
+                "num": 6.8257935357958495
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 113,
+            "config": {
+                "num": 8.587922574841434
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 114,
+            "config": {
+                "num": 7.2113453714521825
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 115,
+            "config": {
+                "num": 8.433496699383468
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 116,
+            "config": {
+                "num": 3.5548731177762836
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 117,
+            "config": {
+                "num": 8.949918440984739
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 118,
+            "config": {
+                "num": 7.449254757522867
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 119,
+            "config": {
+                "num": 9.853591253401854
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 120,
+            "config": {
+                "num": 8.597569759328902
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 121,
+            "config": {
+                "num": 6.302132703374234
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 122,
+            "config": {
+                "num": 1.6730163593180691
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 123,
+            "config": {
+                "num": 8.060809877403917
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 124,
+            "config": {
+                "num": 5.66312122704362
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 125,
+            "config": {
+                "num": 2.990172365481877
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 126,
+            "config": {
+                "num": 7.344274329927388
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 127,
+            "config": {
+                "num": 6.1655788408835
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 128,
+            "config": {
+                "num": 7.115786377483245
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 129,
+            "config": {
+                "num": 6.377813387650217
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 130,
+            "config": {
+                "num": 9.969897161611627
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 131,
+            "config": {
+                "num": 0.11820991704570516
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 132,
+            "config": {
+                "num": 9.40250393879324
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 133,
+            "config": {
+                "num": 4.1022636893584945
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 134,
+            "config": {
+                "num": 5.110686139464054
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 135,
+            "config": {
+                "num": 9.895756478876056
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 136,
+            "config": {
+                "num": 7.383243148907463
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 137,
+            "config": {
+                "num": 7.968780549103198
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 138,
+            "config": {
+                "num": 9.378018619003933
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 139,
+            "config": {
+                "num": 6.549412178507513
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 140,
+            "config": {
+                "num": 0.5991866544898194
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 141,
+            "config": {
+                "num": 6.2285202807125
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 142,
+            "config": {
+                "num": 7.7713690444458186
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 143,
+            "config": {
+                "num": 1.0848333801871113
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 144,
+            "config": {
+                "num": 1.4994710302760594
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 145,
+            "config": {
+                "num": 9.854240642265209
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 146,
+            "config": {
+                "num": 0.25683919617691897
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 147,
+            "config": {
+                "num": 9.924279382515932
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 148,
+            "config": {
+                "num": 9.47293078232542
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 149,
+            "config": {
+                "num": 5.212121418638024
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 150,
+            "config": {
+                "num": 2.00183345818398
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 151,
+            "config": {
+                "num": 7.677932782169259
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 152,
+            "config": {
+                "num": 5.116544251114111
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 153,
+            "config": {
+                "num": 5.782763350569699
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 154,
+            "config": {
+                "num": 5.747338318222328
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 155,
+            "config": {
+                "num": 5.92448224367312
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 156,
+            "config": {
+                "num": 7.604118434552617
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 157,
+            "config": {
+                "num": 9.084709463391166
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 158,
+            "config": {
+                "num": 0.3338335884692889
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 159,
+            "config": {
+                "num": 3.8151189662472174
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 160,
+            "config": {
+                "num": 4.016871972954591
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 161,
+            "config": {
+                "num": 2.4026576997333438
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 162,
+            "config": {
+                "num": 0.649757881936428
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 163,
+            "config": {
+                "num": 5.6417853799838635
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 164,
+            "config": {
+                "num": 4.713376810403927
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 165,
+            "config": {
+                "num": 0.32036909478711406
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 166,
+            "config": {
+                "num": 1.4919793679590432
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 167,
+            "config": {
+                "num": 2.841092897070354
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 168,
+            "config": {
+                "num": 2.256573332056556
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 169,
+            "config": {
+                "num": 5.858779253292971
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 170,
+            "config": {
+                "num": 2.9481031853677053
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 171,
+            "config": {
+                "num": 5.600780720599121
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 172,
+            "config": {
+                "num": 6.280269557236756
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 173,
+            "config": {
+                "num": 1.0379014922249474
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 174,
+            "config": {
+                "num": 7.086620844245659
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 175,
+            "config": {
+                "num": 5.683051983075958
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 176,
+            "config": {
+                "num": 4.187483829106893
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 177,
+            "config": {
+                "num": 6.2455588903724655
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 178,
+            "config": {
+                "num": 4.564488068402602
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 179,
+            "config": {
+                "num": 8.971180846222165
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 180,
+            "config": {
+                "num": 3.633654147869909
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 181,
+            "config": {
+                "num": 2.7986836803072377
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 182,
+            "config": {
+                "num": 0.8203453550488415
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 183,
+            "config": {
+                "num": 4.380776007931217
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 184,
+            "config": {
+                "num": 4.735446413784708
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 185,
+            "config": {
+                "num": 5.530099559131739
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 186,
+            "config": {
+                "num": 3.361632916401296
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 187,
+            "config": {
+                "num": 1.8691787147391081
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 188,
+            "config": {
+                "num": 7.445004505158117
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 189,
+            "config": {
+                "num": 0.02953545354371978
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 190,
+            "config": {
+                "num": 3.207809001962998
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 191,
+            "config": {
+                "num": 3.2150956063048097
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 192,
+            "config": {
+                "num": 0.19690495919416184
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 193,
+            "config": {
+                "num": 0.8264962378372209
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 194,
+            "config": {
+                "num": 7.545000432077893
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 195,
+            "config": {
+                "num": 7.40877827278973
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 196,
+            "config": {
+                "num": 2.840332616620276
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 197,
+            "config": {
+                "num": 6.219161021698637
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 198,
+            "config": {
+                "num": 2.574655602448015
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 199,
+            "config": {
+                "num": 4.81733002658639
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 200,
+            "config": {
+                "num": 7.34472388990503
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 201,
+            "config": {
+                "num": 4.639614276025074
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 202,
+            "config": {
+                "num": 1.7941634506381554
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 203,
+            "config": {
+                "num": 9.082379640208988
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 204,
+            "config": {
+                "num": 7.104122316369578
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 205,
+            "config": {
+                "num": 2.4050001175777336
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 206,
+            "config": {
+                "num": 3.3375671609409685
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 207,
+            "config": {
+                "num": 5.085024332109943
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 208,
+            "config": {
+                "num": 9.266879675284006
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 209,
+            "config": {
+                "num": 4.671897253922229
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 210,
+            "config": {
+                "num": 2.817089525341927
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 211,
+            "config": {
+                "num": 8.40542412176976
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 212,
+            "config": {
+                "num": 9.802448851975038
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 213,
+            "config": {
+                "num": 8.404339975011055
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 214,
+            "config": {
+                "num": 7.387068486878721
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 215,
+            "config": {
+                "num": 7.516261187700223
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 216,
+            "config": {
+                "num": 6.736841254689033
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 217,
+            "config": {
+                "num": 2.680902780136869
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 218,
+            "config": {
+                "num": 6.033551399459606
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 219,
+            "config": {
+                "num": 7.076938071480596
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 220,
+            "config": {
+                "num": 0.2541303602901335
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 221,
+            "config": {
+                "num": 4.65867923030035
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 222,
+            "config": {
+                "num": 2.633437704600541
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 223,
+            "config": {
+                "num": 7.083565669132578
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 224,
+            "config": {
+                "num": 1.794647289420207
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 225,
+            "config": {
+                "num": 2.172948161036877
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 226,
+            "config": {
+                "num": 0.04621479870294043
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 227,
+            "config": {
+                "num": 9.202304653415162
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 228,
+            "config": {
+                "num": 7.596150118836761
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 229,
+            "config": {
+                "num": 0.9518544869732726
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 230,
+            "config": {
+                "num": 7.204690525690955
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 231,
+            "config": {
+                "num": 1.1011053337379073
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 232,
+            "config": {
+                "num": 2.8223864148571023
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 233,
+            "config": {
+                "num": 5.398665978819745
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 234,
+            "config": {
+                "num": 3.224085932908096
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 235,
+            "config": {
+                "num": 2.891615130460777
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 236,
+            "config": {
+                "num": 2.821013554889842
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 237,
+            "config": {
+                "num": 4.919828223677216
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 238,
+            "config": {
+                "num": 2.3038471975803834
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 239,
+            "config": {
+                "num": 8.228249340879067
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 240,
+            "config": {
+                "num": 8.710903812853198
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 241,
+            "config": {
+                "num": 6.773557494468769
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 242,
+            "config": {
+                "num": 8.918376850571361
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 243,
+            "config": {
+                "num": 9.055242244531291
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 244,
+            "config": {
+                "num": 9.63097922303654
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 245,
+            "config": {
+                "num": 2.8043886440925023
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 246,
+            "config": {
+                "num": 4.670153553213389
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 247,
+            "config": {
+                "num": 9.073928848644591
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 248,
+            "config": {
+                "num": 5.211495198871836
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 249,
+            "config": {
+                "num": 8.216134472466125
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 250,
+            "config": {
+                "num": 1.190460678957782
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 251,
+            "config": {
+                "num": 6.790129835218906
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 252,
+            "config": {
+                "num": 0.6008609833615286
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 253,
+            "config": {
+                "num": 4.196437399427799
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 254,
+            "config": {
+                "num": 1.2067942387980524
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 255,
+            "config": {
+                "num": 1.12054657174122
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 256,
+            "config": {
+                "num": 7.802818941177437
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 257,
+            "config": {
+                "num": 1.986512134964007
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 258,
+            "config": {
+                "num": 3.1436396897499463
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 259,
+            "config": {
+                "num": 2.2585748326464463
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 260,
+            "config": {
+                "num": 8.041293081899305
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 261,
+            "config": {
+                "num": 8.082387956900238
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 262,
+            "config": {
+                "num": 5.319074902235118
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 263,
+            "config": {
+                "num": 3.915648081083183
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 264,
+            "config": {
+                "num": 1.724508540246329
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 265,
+            "config": {
+                "num": 2.8594203159065934
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 266,
+            "config": {
+                "num": 1.1403023823068292
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 267,
+            "config": {
+                "num": 3.909251367472917
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 268,
+            "config": {
+                "num": 3.6453388289228075
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 269,
+            "config": {
+                "num": 8.940559595435415
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 270,
+            "config": {
+                "num": 7.861217744803311
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 271,
+            "config": {
+                "num": 7.929317241660692
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 272,
+            "config": {
+                "num": 4.651250499405957
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 273,
+            "config": {
+                "num": 9.058633464630338
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 274,
+            "config": {
+                "num": 2.2989152992616892
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 275,
+            "config": {
+                "num": 2.219957703904023
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 276,
+            "config": {
+                "num": 4.074585468061028
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 277,
+            "config": {
+                "num": 8.3584834166828
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 278,
+            "config": {
+                "num": 0.39594842665798824
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 279,
+            "config": {
+                "num": 5.974048841008725
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 280,
+            "config": {
+                "num": 5.107846955884289
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 281,
+            "config": {
+                "num": 9.325828431139508
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 282,
+            "config": {
+                "num": 4.747095746526035
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 283,
+            "config": {
+                "num": 5.763336377474086
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 284,
+            "config": {
+                "num": 7.531978865066535
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 285,
+            "config": {
+                "num": 8.080236190514578
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 286,
+            "config": {
+                "num": 5.829393254752268
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 287,
+            "config": {
+                "num": 7.302462842372158
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 288,
+            "config": {
+                "num": 9.342724451704491
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 289,
+            "config": {
+                "num": 4.396726563385789
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 290,
+            "config": {
+                "num": 7.368614273526446
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 291,
+            "config": {
+                "num": 6.383367872319824
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 292,
+            "config": {
+                "num": 0.3791697879801659
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 293,
+            "config": {
+                "num": 9.20267555273517
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 294,
+            "config": {
+                "num": 2.2596645194020804
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 295,
+            "config": {
+                "num": 8.789283038590984
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 296,
+            "config": {
+                "num": 3.256972063692436
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 297,
+            "config": {
+                "num": 7.046950037634665
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 298,
+            "config": {
+                "num": 4.300386623414655
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 299,
+            "config": {
+                "num": 0.25760908154325857
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 300,
+            "config": {
+                "num": 4.133755704568225
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 301,
+            "config": {
+                "num": 3.826850841348459
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 302,
+            "config": {
+                "num": 3.7616874595019723
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 303,
+            "config": {
+                "num": 3.2370144199313664
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 304,
+            "config": {
+                "num": 7.074466519397707
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 305,
+            "config": {
+                "num": 0.09357756209379398
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 306,
+            "config": {
+                "num": 5.031863397177632
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 307,
+            "config": {
+                "num": 9.509956105868255
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        },
+        {
+            "trial_id": 308,
+            "config": {
+                "num": 6.282183274998365
+            },
+            "status": 0,
+            "score": null,
+            "bracket": 0
+        }
+    ],
+    "num_gen_config": 0
+}

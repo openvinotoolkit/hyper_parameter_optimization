@@ -1,13 +1,12 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
+""" exporting hpopt APIs
+"""
 
+from .base import SearchSpace, Status
 from .hpopt import (
-    SearchSpace,
-    Status,
     create,
-    createDummyOpt,
-    createHpoDataset,
     finalize_trial,
     get_best_score,
     get_best_score_with_num_imgs,
@@ -15,6 +14,7 @@ from .hpopt import (
     get_previous_status,
     get_status_path,
     get_trial_path,
+    get_trial_results,
     load_json,
     report,
     reportOOM,
@@ -26,12 +26,11 @@ __all__ = [
     "get_current_status",
     "get_previous_status",
     "create",
-    "createHpoDataset",
-    "createDummyOpt",
     "SearchSpace",
     "Status",
     "get_status_path",
     "get_trial_path",
+    "get_trial_results",
     "get_best_score",
     "get_best_score_with_num_imgs",
     "finalize_trial",

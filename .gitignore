@@ -1,4 +1,7 @@
 .vscode
+.trunk
 venv
 __pycache__
 *.egg-info
+.reports
+tmp/

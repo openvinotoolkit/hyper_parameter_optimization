@@ -1,18 +1,145 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
+""" implementation of the base module
+"""
 
 import math
 
 # import logging
 import time
+from enum import IntEnum
 from typing import List, Optional, Union
 
-from hpopt.logger import get_logger
+from .logger import get_logger
+from .utils import type_check
 
 logger = get_logger()
 
 
+class Status(IntEnum):
+    """
+    HPO status enum
+    """
+
+    UNKNOWN = -1
+    READY = 0
+    RUNNING = 1
+    STOP = 2
+    CUDAOOM = 3
+    # Previous HPO task is not found.
+    NORESULT = 4
+    # Previous HPO task is started but not finished yet.
+    PARTIALRESULT = 5
+    # Previous HPO task is completely finished. It means that the best hyper-parameters are already found.``
+    COMPLETERESULT = 6
+
+
+class SearchSpace:
+    """
+    This implements search space used for SMBO and ASHA.
+    This class support uniform and quantized uniform with normal and log scale
+    in addition to categorical type. Quantized type has step which is unit for change.
+
+    Args:
+        type (str): type of hyper parameter in search space.
+                    supported types: uniform, loguniform, quniform, qloguniform, choice
+        range (list): range of hyper parameter search space.
+                      What value at each position means is as bellow.
+                      uniform: [lower space, upper space]
+                      quniform: [lower space, upper space, step]
+                      loguniform: [lower space, upper space, logarithm base]
+                      qloguniform: [lower space, upper space, step, logarithm base]
+                      categorical: [each categorical values, ...]
+    """
+
+    def __init__(self, _type: str, _range: List[Union[float, int]]):
+        self._type = _type
+        self._range = _range
+
+        if self._type in ("uniform", "loguniform"):
+            if len(self._range) == 2:
+                self._range.append(2)
+            elif len(self._range) < 2:
+                raise ValueError(
+                    f"The range of the {self._type} type requires "
+                    "two numbers for lower and upper limits. "
+                    f"Your value is {self._range}"
+                )
+        elif self._type in ("quniform", "qloguniform"):
+            if len(self._range) == 3:
+                self._range.append(2)
+            elif len(self._range) < 3:
+                raise ValueError(
+                    f"The range of the {self._type} type requires "
+                    "three numbers for lower/upper limits and "
+                    "quantization number. "
+                    f"Your value is {self._range}"
+                )
+        elif self._type == "choice":
+            self._range = [0, len(_range)]
+            self.choice_list = _range
+        else:
+            raise TypeError(f"{self._type} is an unknown search space type.")
+
+    def __repr__(self):
+        return f"type: {self._type}, range: {self._range}"
+
+    def lower_space(self):
+        """get lower bound from range"""
+        if self._type == "loguniform":
+            return math.log(self._range[0], self._range[2])
+        if self._type == "qloguniform":
+            return math.log(self._range[0], self._range[3])
+
+        return self._range[0]
+
+    def upper_space(self):
+        """get upper bound from range"""
+        if self._type == "loguniform":
+            return math.log(self._range[1], self._range[2])
+        if self._type == "qloguniform":
+            return math.log(self._range[1], self._range[3])
+
+        return self._range[1]
+
+    def space_to_real(self, number: Union[int, float]):
+        """convert method"""
+        if self._type == "quniform":
+            return round(number / self._range[2]) * self._range[2]
+        if self._type == "loguniform":
+            return self._range[2] ** number
+        if self._type == "qloguniform":
+            return round(self._range[3] ** number / self._range[2]) * self._range[2]
+        if self._type == "choice":
+            idx = int(number)
+            idx = min(idx, len(self.choice_list) - 1)
+            idx = max(idx, 0)
+            return self.choice_list[idx]
+
+        return number
+
+    def real_to_space(self, number: Union[int, float]):
+        """convert method"""
+        if self._type == "loguniform":
+            return math.log(number, self._range[2])
+        if self._type == "qloguniform":
+            return math.log(number, self._range[3])
+
+        return number
+
+    @property
+    def type(self):
+        """property method for the internal attribute"""
+        return self._type
+
+    @property
+    def range(self):
+        """property method for the internal attribute"""
+        return self._range
+
+
+# pylint: disable=too-many-instance-attributes
 class HpOpt:
     """
     This implements class which make frame for bayesian optimization
@@ -21,7 +148,7 @@ class HpOpt:
 
     Args:
         save_path (str): path where result of HPO is saved.
-        search_space (list): hyper parameter search space to find.
+        search_space (dict): hyper parameter search space to find.
         mode (str): One of {min, max}. Determines whether objective is
                     minimizing or maximizing the metric attribute.
         num_init_trials (int): Only for SMBO. How many trials to use to init SMBO.
@@ -49,9 +176,10 @@ class HpOpt:
                        If HPO stopped in middle, you can resume in middle.
     """
 
+    # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements
     def __init__(
         self,
-        search_space: List,
+        search_space: dict,
         save_path: str = "/tmp/hpopt",
         mode: str = "max",
         num_init_trials: int = 5,
@@ -61,100 +189,117 @@ class HpOpt:
         non_pure_train_ratio: float = 0.2,
         full_dataset_size: int = 0,
         metric: str = "mAP",
-        expected_time_ratio: Union[int, float] = 4,
+        expected_time_ratio: Union[float, int] = 4,
         max_iterations: Optional[int] = None,
         max_time=None,
         resources_per_trial=None,
         subset_ratio: Optional[Union[float, int]] = None,
-        min_subset_size=500,
-        image_resize: List[int] = [0, 0],
-        batch_size_name=None,
+        min_subset_size: int = 500,
+        image_resize: List[int] = None,
+        batch_size_name: Optional[str] = None,
         verbose: int = 0,
         resume: bool = False,
     ):
+        if save_path is None:
+            raise TypeError("save_path should be str or path object, Not NoneType")
 
         if mode not in ["min", "max"]:
             raise ValueError("'mode' should be one of 'min' or 'max'.")
 
-        if type(expected_time_ratio) != float and type(expected_time_ratio) != int:
-            TypeError("expected_time_ratio should be float or int type.")
-        elif expected_time_ratio <= 0:
-            ValueError(
-                "expected_time_ratio should be bigger than 0."
-                f" Your value is {expected_time_ratio}"
-            )
+        type_check(search_space, [dict])
 
-        if type(full_dataset_size) != int:
-            TypeError("full_dataset_size should be int type.")
-        elif full_dataset_size < 0:
-            ValueError(
-                "full_dataset_size should be postive value"
-                f"Your value is {full_dataset_size}."
-            )
+        # if not isinstance(expected_time_ratio, float) and not isinstance(
+        #     expected_time_ratio, int
+        # ):
+        #     raise TypeError("expected_time_ratio should be float or int type.")
+        # if expected_time_ratio <= 0:
+        #     raise ValueError(
+        #         "expected_time_ratio should be bigger than 0."
+        #         f" Your value is {expected_time_ratio}"
+        #     )
+        type_check(expected_time_ratio, [float, int], positive=True, non_zero=True)
 
-        if type(num_full_iterations) != int:
-            TypeError("num_full_iteration should be int type.")
-        elif num_full_iterations < 1:
-            raise ValueError(
-                "num_full_iterations should be 1 <=."
-                f" Your value is {num_full_iterations}"
-            )
+        # if not isinstance(full_dataset_size, int):
+        #     raise TypeError("full_dataset_size should be int type.")
+        # if full_dataset_size < 0:
+        #     raise ValueError(
+        #         "full_dataset_size should be zero or postive value"
+        #         f"Your value is {full_dataset_size}."
+        #     )
+        type_check(full_dataset_size, int, positive=True)
 
-        if type(non_pure_train_ratio) != float:
-            TypeError("non_pure_train_ratio should be int type.")
-        elif not (0 < non_pure_train_ratio < 1):
-            raise ValueError(
-                "non_pure_train_ratio should be between 0 and 1."
-                f" Your value is {non_pure_train_ratio}"
-            )
+        # if not isinstance(num_full_iterations, int):
+        #     raise TypeError("num_full_iteration should be int type.")
+        # if num_full_iterations < 1:
+        #     raise ValueError(
+        #         "num_full_iterations should be 1 <=."
+        #         f" Your value is {num_full_iterations}"
+        #     )
+        type_check(num_full_iterations, int, positive=True, non_zero=True)
 
-        if type(num_init_trials) != int:
-            raise TypeError("num_init_trials should be int type")
-        elif num_init_trials < 1:
-            raise ValueError(
-                "num_init_trials should be bigger than 0."
-                f" Your value is {num_init_trials}"
-            )
+        # if not isinstance(non_pure_train_ratio, float):
+        #     raise TypeError("non_pure_train_ratio should be int type.")
+        type_check(non_pure_train_ratio, float)
+        if 0 > non_pure_train_ratio or 1 < non_pure_train_ratio:
+            raise ValueError("non_pure_train_ratio should be between 0 and 1." f" Your value is {non_pure_train_ratio}")
 
-        if max_iterations is not None:
-            if type(max_iterations) != int:
-                raise TypeError("max_iterations should be int type")
-            elif max_iterations < 1:
-                raise ValueError(
-                    "max_iterations should be bigger than 0."
-                    f" Your value is {max_iterations}"
-                )
+        # if not isinstance(num_init_trials, int):
+        #     raise TypeError("num_init_trials should be int type")
+        # if num_init_trials < 1:
+        #     raise ValueError(
+        #         "num_init_trials should be bigger than 0."
+        #         f" Your value is {num_init_trials}"
+        #     )
+        type_check(num_init_trials, int, positive=True, non_zero=True)
 
-        if num_trials is not None:
-            if type(num_trials) != int:
-                raise TypeError("num_trials should be int type")
-            elif num_trials < 1:
-                raise ValueError(
-                    "num_trials should be bigger than 0." f" Your value is {num_trials}"
-                )
+        # if max_iterations is not None:
+        #     if not isinstance(max_iterations, int):
+        #         raise TypeError("max_iterations should be int type")
+        #     if max_iterations < 1:
+        #         raise ValueError(
+        #             "max_iterations should be bigger than 0."
+        #             f" Your value is {max_iterations}"
+        #         )
+        type_check(max_iterations, [int, type(None)], positive=True, non_zero=True)
 
-        if type(num_workers) != int:
-            raise TypeError("num_workers should be int type")
-        elif num_workers < 1:
-            raise ValueError(
-                "num_workers should be bigger than 0." f" Your value is {num_workers}"
-            )
+        # if num_trials is not None:
+        #     if not isinstance(num_trials, int):
+        #         raise TypeError("num_trials should be int type")
+        #     if num_trials < 1:
+        #         raise ValueError(
+        #             "num_trials should be bigger than 0." f" Your value is {num_trials}"
+        #         )
+        type_check(num_trials, [int, type(None)], positive=True, non_zero=True)
 
+        # if not isinstance(num_workers, int):
+        #     raise TypeError("num_workers should be int type")
+        # if num_workers < 1:
+        #     raise ValueError(
+        #         "num_workers should be bigger than 0." f" Your value is {num_workers}"
+        #     )
+        type_check(num_workers, int, positive=True, non_zero=True)
+
+        type_check(subset_ratio, [float, int, type(None)])
         if subset_ratio is not None:
-            if type(subset_ratio) != float and type(subset_ratio) != int:
-                raise TypeError("subset_ratio should be float or int type")
-            elif not (0 < subset_ratio <= 1.0):
-                raise ValueError(
-                    "subset_ratio should be > 0 and <= 1."
-                    f" Your value is {subset_ratio}"
-                )
+            # if not isinstance(subset_ratio, float) and not isinstance(
+            #     subset_ratio, int
+            # ):
+            #     raise TypeError("subset_ratio should be float or int type")
+            if 0 >= subset_ratio or 1.0 < subset_ratio:
+                raise ValueError("subset_ratio should be > 0 and <= 1." f" Your value is {subset_ratio}")
+
+        if image_resize is None:
+            image_resize = [0, 0]
 
         if not hasattr(image_resize, "__getitem__"):
             raise TypeError("image_resize should be able to accessible by index.")
-        elif len(image_resize) < 2:
+        if len(image_resize) < 2:
             raise ValueError("image_resize should have at least two values.")
-        elif image_resize[0] < 0 or image_resize[1] < 0:
+        if image_resize[0] < 0 or image_resize[1] < 0:
             raise ValueError("Each value of image_resize should be positive.")
+
+        if not isinstance(min_subset_size, int):
+            raise TypeError("min_subset_size should be an integer value.")
 
         self.save_path = save_path
         self.search_space = search_space
@@ -174,26 +319,31 @@ class HpOpt:
         self.image_resize = image_resize
         self.verbose = verbose
         self.resume = resume
-        self.hpo_status: dict = {}
         self.metric = metric
         self.batch_size_name = batch_size_name
+        self.hpo_status: dict = {}
 
     def get_next_sample(self):
-        pass
+        """api definition to get next sample"""
 
     def get_next_samples(self, num_expected_samples=0):
-        pass
+        """api definition to get next sample"""
 
     def update_scores(self):
-        pass
+        """api definition to update scores"""
 
     def save_results(self):
-        pass
+        """api definition to save results"""
 
-    def obj(self, **kwargs):
+    # pylint: disable=unused-argument
+    @staticmethod
+    def obj(**kwargs):
+        """definition of the empty object method for bayes opt"""
         return 0
 
-    def hasCategoricalParam(self, search_space):
+    @staticmethod
+    def has_categorical_param(search_space):
+        """helper function to check whether search space config has categorical hp."""
         for param in search_space:
             if search_space[param].type == "choice":
                 return True
@@ -201,18 +351,21 @@ class HpOpt:
         return False
 
     def get_real_config(self, config):
+        """convert space to specific value"""
         real_config = {}
         for param in config:
             real_config[param] = self.search_space[param].space_to_real(config[param])
         return real_config
 
     def get_space_config(self, config):
+        """convert specific value to space"""
         space_config = {}
         for param in config:
             space_config[param] = self.search_space[param].real_to_space(config[param])
         return space_config
 
     def print_results(self):
+        """helper function to print out the overall HPO report"""
         field_widths = []
         field_param_name = []
         print(f'|{"#": ^5}|', end="")
@@ -235,6 +388,7 @@ class HpOpt:
                 print("")
 
     def check_duplicated_config(self, new_config):
+        """helper function to verify the config to avoid redundancy of the trial config"""
         for old_item in self.hpo_status["config_list"]:
             old_config = old_item["config"]
             matched = True
@@ -252,6 +406,7 @@ class HpOpt:
         return False
 
     def get_best_config(self):
+        """api to get the best config from the HPO status"""
         self.update_scores()
 
         # Wait for updating files up to 5 seconds.
@@ -302,4 +457,4 @@ class HpOpt:
         return self.hpo_status["config_list"][best_trial_id]["config"]
 
     def get_progress(self):
-        pass
+        """api to get current progress of the HPO process"""
