@@ -366,11 +366,16 @@ class AsyncHyperBand(HpOpt):
         # Check total number of trained images
         if self._expected_total_images > 0:
             num_trained_images = self.get_num_trained_images()
+
             logger.debug(
                 f"expected total images = {self._expected_total_images} "
-                f"num_images = {num_trained_images}"
+                f"num_trained_image = {num_trained_images}"
+                f"number of image best trial used to trian = {self._current_best['image']}"
             )
-            if num_trained_images >= self._expected_total_images:
+
+            if (self._expected_total_images * 1.2
+                < num_trained_images + self._current_best['image']
+            ):
                 return None
 
         # Choose a config
