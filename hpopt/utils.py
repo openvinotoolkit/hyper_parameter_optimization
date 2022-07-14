@@ -42,7 +42,7 @@ def type_check(
 
     name_of_input = "input"
     if isinstance(callers_local_vars, ItemsView):
-        name_list = [var_name for var_name, var_val in callers_local_vars if id(var_val) == id(input)]
+        name_list = [var_name for var_name, var_val in callers_local_vars if id(var_val) == id(_input)]
         name_of_input = name_list[0] if len(name_list) > 0 and _input is not None else "input"
 
     allowed = False
@@ -59,7 +59,7 @@ def type_check(
             f"expected type(s) of the '{name_of_input}': {expected_type}, but the input type is {type(_input)}"
         )
 
-    if positive is not None and input is not None:
+    if positive is not None and _input is not None:
         if positive and _input < 0:
             raise ValueError(f"'{name_of_input}' is expected to be positive number but {_input}.")
         if not positive and _input > 0:
