@@ -463,6 +463,10 @@ class AsyncHyperBand(HpOpt):
         # If the current schedule is updatable, adjust it regarding to the latest information
         if self._updatable_schedule and is_score_update:
             logger.info("best trial changed. updating schedule...")
+
+            if self.n_imgs_for_min_train > self._current_best["image"]:
+                self.n_imgs_for_min_train = self._current_best["image"]
+
             num_trials, new_expected_total_images = self._calc_total_budget(
                 self._num_brackets,
                 self.expected_time_ratio,
