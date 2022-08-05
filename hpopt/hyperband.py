@@ -10,13 +10,13 @@ from typing import Dict, List, Optional, Union
 from bayes_opt import BayesianOptimization, UtilityFunction
 
 import hpopt
-from hpopt.base import HpOpt
+from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
 
 logger = get_logger()
 
 
-class AsyncHyperBand(HpOpt):
+class AsyncHyperBand(HpoBase):
     """
     This implements the Asyncronous HyperBand scheduler with iterations only.
     Please refer the below papers for the detailed algorithm.
@@ -103,7 +103,6 @@ class AsyncHyperBand(HpOpt):
                 full_dataset_size=self.full_dataset_size,
                 subset_ratio=self.subset_ratio,
                 non_pure_train_ratio=self.non_pure_train_ratio,
-                num_hyperparams=len(self.search_space),
                 reduction_factor=self._reduction_factor,
                 parallelism=self.num_workers,
                 min_epochs=self._min_iterations,
@@ -145,12 +144,7 @@ class AsyncHyperBand(HpOpt):
 
         # Initialize a bayesopt optimizer.
         # It will be used for generating trials.
-        self.bayesopt_space = {}
-        for param in self.search_space:
-            self.bayesopt_space[param] = (
-                self.search_space[param].lower_space(),
-                self.search_space[param].upper_space(),
-            )
+        self.bayesopt_space = self.search_space.get_bayeopt_search_space()
 
         self.optimizer = BayesianOptimization(
             f=self.obj,
@@ -167,7 +161,7 @@ class AsyncHyperBand(HpOpt):
             kappa_decay_delay=self.num_init_trials,
         )
 
-        if self.hasCategoricalParam(self.search_space):
+        if self.search_space.has_categorical_param():
             self.optimizer.set_gp_params(alpha=1e-3)
 
         # All information in self.hpo_status will be stored at hpo_file_path.
@@ -347,14 +341,6 @@ class AsyncHyperBand(HpOpt):
 
         return brackets
 
-    def save_results(self):
-        hpo_file_path = hpopt.get_status_path(self.save_path)
-        oldmask = os.umask(0o077)
-        with open(hpo_file_path, "wt") as json_file:
-            json.dump(self.hpo_status, json_file, indent=4)
-            json_file.close()
-        os.umask(oldmask)
-
     def get_next_sample(self):
         # Gather all results from workers
         self.update_scores()
@@ -515,51 +501,42 @@ class AsyncHyperBand(HpOpt):
             return
 
         # Check if the search space type for batch size if qloguniform or quniform.
-        if self.search_space[self.batch_size_name].type not in [
-            "qloguniform",
-            "quniform",
-        ]:
+        if not self.search_space[self.batch_size_name].use_quantized_step():
             return
 
         not_allowed_bs = not_allowed_config["config"][self.batch_size_name]
         new_upper_bound = (
-            not_allowed_bs - self.search_space[self.batch_size_name].range[2]
+            not_allowed_bs - self.search_space[self.batch_size_name].step
         )
 
         # if new_upper_bound is greater than the current upper bound, update only this trial.
-        if self.search_space[self.batch_size_name].range[1] <= new_upper_bound:
-            not_allowed_config["config"] = self.get_real_config(
+        if self.search_space[self.batch_size_name].max <= new_upper_bound:
+            not_allowed_config["config"] = self.search_space.get_real_config(
                 self.optimizer.suggest(self.uf)
             )
             return
 
-        self.search_space[self.batch_size_name].range[1] = new_upper_bound
+        self.search_space[self.batch_size_name].max = new_upper_bound
 
         # if the new upper bound is less than the current lower bound,
         # update the lower bound to be half of the new upper bound.
         if (
-            self.search_space[self.batch_size_name].range[0]
-            > self.search_space[self.batch_size_name].range[1]
+            self.search_space[self.batch_size_name].min
+            > self.search_space[self.batch_size_name].max
         ):
-            new_lower_bound = self.search_space[self.batch_size_name].range[1] // 2
-            self.search_space[self.batch_size_name].range[0] = max(new_lower_bound, 2)
+            new_lower_bound = self.search_space[self.batch_size_name].max // 2
+            self.search_space[self.batch_size_name].min = max(new_lower_bound, 2)
 
             if (
-                self.search_space[self.batch_size_name].range[0]
-                > self.search_space[self.batch_size_name].range[1]
+                self.search_space[self.batch_size_name].min
+                > self.search_space[self.batch_size_name].max
             ):
                 raise ValueError(
                     "This model cannot be trained even with batch size of 2."
                 )
 
         # Reset search space
-        self.bayesopt_space = {}
-        for param in self.search_space:
-            self.bayesopt_space[param] = (
-                self.search_space[param].lower_space(),
-                self.search_space[param].upper_space(),
-            )
-
+        self.bayesopt_space = self.search_space.get_bayeopt_search_space()
         self.optimizer = BayesianOptimization(
             f=self.obj,
             pbounds=self.bayesopt_space,
@@ -567,7 +544,7 @@ class AsyncHyperBand(HpOpt):
             random_state=None,
         )
 
-        if self.hasCategoricalParam(self.search_space):
+        if self.search_space.has_categorical_param():
             self.optimizer.set_gp_params(alpha=1e-3)
 
         for idx, config in enumerate(self.hpo_status["config_list"]):
@@ -594,7 +571,6 @@ class AsyncHyperBand(HpOpt):
         full_dataset_size: Optional[int],
         subset_ratio: Optional[Union[float, int]],
         non_pure_train_ratio: float,
-        num_hyperparams: int,
         reduction_factor: int,
         parallelism: int,
         min_epochs: Optional[int],
@@ -615,9 +591,6 @@ class AsyncHyperBand(HpOpt):
         if non_pure_train_ratio is None:
             raise ValueError("non_pure_train_ratio should be specified.")
 
-        if num_hyperparams is None:
-            raise ValueError("num_hyperparams should be specified.")
-
         if reduction_factor is None:
             reduction_factor = 2
 
@@ -627,7 +600,6 @@ class AsyncHyperBand(HpOpt):
             f"full_dataset_size = {full_dataset_size}, "
             f"subset_ratio = {subset_ratio}, "
             f"non_pure_train_ratio = {non_pure_train_ratio}, "
-            f"num_hyperparams = {num_hyperparams}, "
             f"reduction_factor = {reduction_factor}, "
             f"parallelism = {parallelism}, "
             f"min_epochs = {min_epochs}, "

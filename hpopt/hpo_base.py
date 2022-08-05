@@ -3,17 +3,20 @@
 #
 
 import math
-
-# import logging
 import time
-from typing import List, Optional, Union
+import os
+import json
+from abc import ABC, abstractmethod
+from typing import List, Optional, Union, Dict, Any
 
+import hpopt
 from hpopt.logger import get_logger
+from hpopt.searchspace import SearchSpace
 
 logger = get_logger()
 
 
-class HpOpt:
+class HpoBase(ABC):
     """
     This implements class which make frame for bayesian optimization
     or ahsa class. So, only common methods are implemented but
@@ -51,7 +54,7 @@ class HpOpt:
 
     def __init__(
         self,
-        search_space: List,
+        search_space: Dict[str, Dict[str, Any]],
         save_path: str = "/tmp/hpopt",
         mode: str = "max",
         num_init_trials: int = 5,
@@ -157,7 +160,7 @@ class HpOpt:
             raise ValueError("Each value of image_resize should be positive.")
 
         self.save_path = save_path
-        self.search_space = search_space
+        self.search_space = SearchSpace(search_space)
         self.mode = mode
         self.num_init_trials = num_init_trials
         self.num_trials = num_trials
@@ -178,39 +181,17 @@ class HpOpt:
         self.metric = metric
         self.batch_size_name = batch_size_name
 
-    def get_next_sample(self):
-        pass
-
-    def get_next_samples(self, num_expected_samples=0):
-        pass
-
-    def update_scores(self):
-        pass
-
     def save_results(self):
-        pass
+        """Sync the current status to the file system."""
+        hpo_file_path = hpopt.get_status_path(self.save_path)
+        oldmask = os.umask(0o077)
+        with open(hpo_file_path, "wt") as json_file:
+            json.dump(self.hpo_status, json_file, indent=4)
+            json_file.close()
+        os.umask(oldmask)
 
     def obj(self, **kwargs):
         return 0
-
-    def hasCategoricalParam(self, search_space):
-        for param in search_space:
-            if search_space[param].type == "choice":
-                return True
-
-        return False
-
-    def get_real_config(self, config):
-        real_config = {}
-        for param in config:
-            real_config[param] = self.search_space[param].space_to_real(config[param])
-        return real_config
-
-    def get_space_config(self, config):
-        space_config = {}
-        for param in config:
-            space_config[param] = self.search_space[param].real_to_space(config[param])
-        return space_config
 
     def print_results(self):
         field_widths = []
@@ -301,5 +282,18 @@ class HpOpt:
 
         return self.hpo_status["config_list"][best_trial_id]["config"]
 
+    @abstractmethod
+    def get_next_sample(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_scores(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def auto_config(self):
+        raise NotImplementedError
+
+    @abstractmethod
     def get_progress(self):
-        pass
+        raise NotImplementedError

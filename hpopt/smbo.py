@@ -10,13 +10,13 @@ from typing import Dict, List, Optional, Union
 from bayes_opt import BayesianOptimization, UtilityFunction
 
 import hpopt
-from hpopt.base import HpOpt
+from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
 
 logger = get_logger()
 
 
-class BayesOpt(HpOpt):
+class Smbo(HpoBase):
     """
     This implements the Bayesian optimization. Bayesian optimization is
     sequantial optimization method. Previous results affects which hyper parameter
@@ -38,7 +38,7 @@ class BayesOpt(HpOpt):
         default_hyper_parameters: Optional[Union[List[Dict], Dict]] = None,
         **kwargs,
     ):
-        super(BayesOpt, self).__init__(**kwargs)
+        super(Smbo, self).__init__(**kwargs)
         self.updatable_schedule = False
         self.early_stop = early_stop
 
@@ -205,14 +205,6 @@ class BayesOpt(HpOpt):
             )
 
         self.save_results()
-
-    def save_results(self):
-        hpo_file_path = hpopt.get_status_path(self.save_path)
-        oldmask = os.umask(0o077)
-        with open(hpo_file_path, "wt") as json_file:
-            json.dump(self.hpo_status, json_file, indent=4)
-            json_file.close()
-        os.umask(oldmask)
 
     def update_scores(self):
         for trial_id, config_item in enumerate(self.hpo_status["config_list"], start=0):

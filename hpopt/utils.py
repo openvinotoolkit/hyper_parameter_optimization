@@ -4,7 +4,6 @@
 
 import glob
 import json
-import math
 import os
 import time
 from enum import IntEnum
@@ -20,99 +19,9 @@ import hpopt
 from hpopt.dummy import DummyOpt
 from hpopt.hyperband import AsyncHyperBand
 from hpopt.logger import get_logger
-from hpopt.smbo import BayesOpt
+from hpopt.smbo import Smbo
 
 logger = get_logger()
-
-
-class SearchSpace:
-    """
-    This implements search space used for SMBO and ASHA.
-    This class support uniform and quantized uniform with normal and log scale
-    in addition to categorical type. Quantized type has step which is unit for change.
-
-    Args:
-        type (str): type of hyper parameter in search space.
-                    supported types: uniform, loguniform, quniform, qloguniform, choice
-        range (list): range of hyper parameter search space.
-                      What value at each position means is as bellow.
-                      uniform: [lower space, upper space]
-                      quniform: [lower space, upper space, step]
-                      loguniform: [lower space, upper space, logarithm base]
-                      qloguniform: [lower space, upper space, step, logarithm base]
-                      categorical: [each categorical values, ...]
-    """
-
-    def __init__(self, type: str, range: List[Union[float, int]]):
-        self.type = type
-        self.range = range
-
-        if self.type == "uniform" or self.type == "loguniform":
-            if len(self.range) == 2:
-                range.append(2)
-            elif len(self.range) < 2:
-                raise ValueError(
-                    f"The range of the {self.type} type requires "
-                    "two numbers for lower and upper limits. "
-                    f"Your value is {self.range}"
-                )
-        elif self.type == "quniform" or self.type == "qloguniform":
-            if len(self.range) == 3:
-                range.append(2)
-            elif len(self.range) < 3:
-                raise ValueError(
-                    f"The range of the {self.type} type requires "
-                    "three numbers for lower/upper limits and "
-                    "quantization number. "
-                    f"Your value is {self.range}"
-                )
-        elif self.type == "choice":
-            self.range = [0, len(range)]
-            self.choice_list = range
-        else:
-            raise TypeError(f"{self.type} is an unknown search space type.")
-
-    def __repr__(self):
-        return f"type: {self.type}, range: {self.range}"
-
-    def lower_space(self):
-        if self.type == "loguniform":
-            return math.log(self.range[0], self.range[2])
-        elif self.type == "qloguniform":
-            return math.log(self.range[0], self.range[3])
-
-        return self.range[0]
-
-    def upper_space(self):
-        if self.type == "loguniform":
-            return math.log(self.range[1], self.range[2])
-        elif self.type == "qloguniform":
-            return math.log(self.range[1], self.range[3])
-
-        return self.range[1]
-
-    def space_to_real(self, number: Union[int, float]):
-        if self.type == "quniform":
-            return round(number / self.range[2]) * self.range[2]
-        elif self.type == "loguniform":
-            return self.range[2] ** number
-        elif self.type == "qloguniform":
-            return round(self.range[3] ** number / self.range[2]) * self.range[2]
-        elif self.type == "choice":
-            idx = int(number)
-            idx = min(idx, len(self.choice_list) - 1)
-            idx = max(idx, 0)
-            return self.choice_list[idx]
-
-        return number
-
-    def real_to_space(self, number: Union[int, float]):
-        if self.type == "loguniform":
-            return math.log(number, self.range[2])
-        elif self.type == "qloguniform":
-            return math.log(number, self.range[3])
-
-        return number
 
 
 def createDummyOpt(
@@ -127,7 +36,7 @@ def createDummyOpt(
 def create(
     full_dataset_size: int,
     num_full_iterations: int,
-    search_space: List[SearchSpace],
+    search_space: Dict[str, Dict[str, Any]],
     save_path: str = "hpo",
     search_alg: str = "bayes_opt",
     early_stop: Optional[bool] = None,
@@ -206,7 +115,7 @@ def create(
         clear_trial_files(save_path)
 
     if search_alg == "bayes_opt":
-        return BayesOpt(
+        return Smbo(
             save_path=save_path,
             search_space=search_space,
             early_stop=early_stop,

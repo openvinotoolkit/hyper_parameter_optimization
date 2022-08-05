@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from .hpopt import (
-    SearchSpace,
+from .utils import (
     Status,
     create,
     createDummyOpt,
