@@ -6,13 +6,13 @@ import json
 import os
 
 import hpopt
-from hpopt.base import HpOpt
+from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
 
 logger = get_logger()
 
 
-class DummyOpt(HpOpt):
+class DummyOpt(HpoBase):
     def __init__(self, **kwargs):
         super(DummyOpt, self).__init__(**kwargs)
 

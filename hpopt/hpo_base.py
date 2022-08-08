@@ -11,7 +11,7 @@ from typing import List, Optional, Union, Dict, Any
 
 import hpopt
 from hpopt.logger import get_logger
-from hpopt.searchspace import SearchSpace
+from hpopt.search_space import SearchSpace
 
 logger = get_logger()
 
