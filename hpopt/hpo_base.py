@@ -12,6 +12,7 @@ from typing import List, Optional, Union, Dict, Any
 import hpopt
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
+from hpopt.utils import _check_type
 
 logger = get_logger()
 
@@ -79,76 +80,67 @@ class HpoBase(ABC):
         if mode not in ["min", "max"]:
             raise ValueError("'mode' should be one of 'min' or 'max'.")
 
-        if type(expected_time_ratio) != float and type(expected_time_ratio) != int:
-            TypeError("expected_time_ratio should be float or int type.")
-        elif expected_time_ratio <= 0:
+        _check_type(expected_time_ratio, (float, int), "expected_time_ratio")
+        if expected_time_ratio <= 0:
             ValueError(
-                "expected_time_ratio should be bigger than 0."
+                "expected_time_ratio should be positive."
                 f" Your value is {expected_time_ratio}"
             )
 
-        if type(full_dataset_size) != int:
-            TypeError("full_dataset_size should be int type.")
-        elif full_dataset_size < 0:
+        _check_type(full_dataset_size, int, "full_dataset_size")
+        if full_dataset_size < 0:
             ValueError(
-                "full_dataset_size should be postive value"
+                "full_dataset_size should be greater than or equal to 0."
                 f"Your value is {full_dataset_size}."
             )
 
-        if type(num_full_iterations) != int:
-            TypeError("num_full_iteration should be int type.")
-        elif num_full_iterations < 1:
+        _check_type(num_full_iterations, int, "num_full_iterations")
+        if num_full_iterations < 1:
             raise ValueError(
-                "num_full_iterations should be 1 <=."
+                "num_full_iterations should be positive."
                 f" Your value is {num_full_iterations}"
             )
 
-        if type(non_pure_train_ratio) != float:
-            TypeError("non_pure_train_ratio should be int type.")
-        elif not (0 < non_pure_train_ratio < 1):
+        _check_type(non_pure_train_ratio, float, "non_pure_train_ratio")
+        if not (0 < non_pure_train_ratio < 1):
             raise ValueError(
                 "non_pure_train_ratio should be between 0 and 1."
                 f" Your value is {non_pure_train_ratio}"
             )
 
-        if type(num_init_trials) != int:
-            raise TypeError("num_init_trials should be int type")
-        elif num_init_trials < 1:
+        _check_type(num_init_trials, int, "num_init_trials")
+        if num_init_trials < 1:
             raise ValueError(
-                "num_init_trials should be bigger than 0."
+                "num_init_trials should be positive."
                 f" Your value is {num_init_trials}"
             )
 
         if max_iterations is not None:
-            if type(max_iterations) != int:
-                raise TypeError("max_iterations should be int type")
-            elif max_iterations < 1:
+            _check_type(max_iterations, int, "max_iterations")
+            if max_iterations < 1:
                 raise ValueError(
-                    "max_iterations should be bigger than 0."
+                    "max_iterations should be positive."
                     f" Your value is {max_iterations}"
                 )
 
         if num_trials is not None:
-            if type(num_trials) != int:
-                raise TypeError("num_trials should be int type")
-            elif num_trials < 1:
+            _check_type(num_trials, int, "num_trials")
+            if num_trials < 1:
                 raise ValueError(
-                    "num_trials should be bigger than 0." f" Your value is {num_trials}"
+                    "num_trials should be positive." f" Your value is {num_trials}"
                 )
 
-        if type(num_workers) != int:
-            raise TypeError("num_workers should be int type")
-        elif num_workers < 1:
+        _check_type(num_workers, int, "num_workers")
+        if num_workers < 1:
             raise ValueError(
-                "num_workers should be bigger than 0." f" Your value is {num_workers}"
+                "num_workers should be positive." f" Your value is {num_workers}"
             )
 
         if subset_ratio is not None:
-            if type(subset_ratio) != float and type(subset_ratio) != int:
-                raise TypeError("subset_ratio should be float or int type")
-            elif not (0 < subset_ratio <= 1.0):
+            _check_type(subset_ratio, (float, int), "subset_ratio")
+            if not (0 < subset_ratio <= 1.0):
                 raise ValueError(
-                    "subset_ratio should be > 0 and <= 1."
+                    "subset_ratio should be greater than 0 and lesser than or equal to 1."
                     f" Your value is {subset_ratio}"
                 )
 

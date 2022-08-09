@@ -8,7 +8,7 @@ import os
 import time
 from enum import IntEnum
 from statistics import median
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import numpy as np
 import torch
@@ -16,21 +16,11 @@ from torch.utils.data import random_split
 from torchvision import transforms
 
 import hpopt
-from hpopt.dummy import DummyOpt
 from hpopt.hyperband import AsyncHyperBand
 from hpopt.logger import get_logger
 from hpopt.smbo import Smbo
 
 logger = get_logger()
-
-
-def createDummyOpt(
-    search_alg=None, save_path=None, search_space=None, resume=False, **kwargs
-):
-    if save_path is None:
-        return None
-
-    return DummyOpt(save_path=save_path, search_space=search_space, resume=resume)
 
 
 def create(
@@ -687,88 +677,25 @@ class Status(IntEnum):
     COMPLETERESULT = 6
 
 
-class HpoDataset:
-    """
-    Dataset class which wrap dataset class used in training for sub-sampling.
-
-    Args:
-        fullset: dataset instance used in train.
-        config (dict): HPO configuration for a trial.
-                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
-                       and tiral information.
-    """
-
-    def __init__(self, fullset, config: Dict[str, Any]):
-        self.__dict__ = fullset.__dict__.copy()
-        self.fullset = fullset
-
-        if config["subset_ratio"] > 0.0:
-            if config["subset_ratio"] < 1.0:
-                subset_size = int(len(fullset) * config["subset_ratio"])
-                self.subset, _ = random_split(
-                    fullset,
-                    [subset_size, (len(fullset) - subset_size)],
-                    generator=torch.Generator().manual_seed(42),
-                )
-
-                # check if fullset is an inheritance of mmdet.datasets
-                if hasattr(self, "flag"):
-                    self._update_group_flag()
-            else:
-                self.subset = fullset
-            self.length = len(self.subset)
-        else:
-            self.subset = fullset
-            self.length = len(fullset)
-
-        if config["resize_height"] > 0 and config["resize_width"] > 0:
-            self.transform = transforms.Resize(
-                (config["resize_height"], config["resize_width"]), interpolation=2
+def _check_type(
+    value: Any,
+    available_type: Union[type, Tuple],
+    variable_name: Optional[str] = None,
+    error_message: Optional[str] = None
+):
+    """Validate value type and if not, raise error."""
+    if not isinstance(value, available_type):
+        if not isinstance(available_type, tuple):
+            available_type = [available_type]
+        if error_message is not None:
+            message = error_message
+        elif variable_name is not None:
+            message = (
+                f"{variable_name} should be " +
+                " or ".join([str(val) for val in available_type]) +
+                f". Current {variable_name} type is {type(value)}"
             )
         else:
-            self.transform = None
+            raise TypeError
+        raise TypeError(message)
 
-    def _update_group_flag(self):
-        self.flag = np.zeros(len(self.subset), dtype=np.uint8)
-
-        update_flag = False
-        if "img_metas" in self.subset[0]:
-            if "ori_shape" in self.subset[0]["img_metas"].data:
-                update_flag = True
-
-        if not update_flag:
-            return
-
-        for i in range(len(self.subset)):
-            self.flag[i] = self.fullset.flag[self.subset.indices[i]]
-
-    def __getitem__(self, index: int):
-        data = self.subset[index]
-        if self.transform:
-            if type(data) is tuple and len(data) == 2 and type(data[0]) == torch.Tensor:
-                data = (self.transform(data[0]), data[1])
-            elif type(data) is dict and "img" in data:
-                data["img"] = self.transform(data["img"])
-        return data
-
-    def __len__(self):
-        return self.length
-
-    def __getattr__(self, item: str):
-        if isinstance(item, str) and (item == "__setstate__" or item == "__getstate__"):
-            raise AttributeError(item)
-
-        return getattr(self.fullset, item)
-
-
-def createHpoDataset(fullset, config: Dict[str, Any]):
-    """
-    wrap original dataset by HpoDataset using hpo_config returend by Hpopt.
-
-    Args:
-        fullset: dataset instance used in train.
-        config (dict): HPO configuration for a trial.
-                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
-                       and tiral information.
-    """
-    return HpoDataset(fullset, config)

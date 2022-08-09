@@ -42,7 +42,7 @@ class TestSingleSearchSpace:
         with pytest.raises(TypeError):
             search_space_class = SingleSearchSpace("uniform", 2, val, 2, 2)
 
-    @pytest.mark.parametrize("step", ["string", [1,2], {1:2}, 1.2])
+    @pytest.mark.parametrize("step", ["string", [1,2], {1:2}])
     def test_init_wrong_step_type(self, step):
         with pytest.raises(TypeError):
             search_space_class = SingleSearchSpace("qloguniform", 2, 100, step, 2)
@@ -270,6 +270,14 @@ class TestSearchSpace:
             num_to_delete = 1
         search_space[f"{type}_search_space"]["range"] = search_space[f"{type}_search_space"]["range"][:-num_to_delete]
         with pytest.raises(ValueError):
+            ss = SearchSpace(search_space)
+
+    @pytest.mark.parametrize("wrong_type_val", [1, 1.2, "string"])
+    def test_init_with_wrong_range_type(self, wrong_type_val):
+        search_space = self.get_search_space_depending_on_type(ALL_TYPE, True)
+        for val in search_space.values():
+            val["range"] = wrong_type_val
+        with pytest.raises(TypeError):
             ss = SearchSpace(search_space)
 
     def test_init_both_format_exists(self):

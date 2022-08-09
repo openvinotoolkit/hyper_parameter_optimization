@@ -2,33 +2,11 @@ import math
 from typing import Any, Dict, List, Optional, Union, Tuple
 
 from hpopt.logger import get_logger
+from hpopt.utils import _check_type
 
 logger = get_logger()
 
 AVAILABLE_SEARCH_SPACE_TYPE = ["uniform", "quniform", "loguniform", "qloguniform", "choice"]
-
-def _check_type(
-    value: Any,
-    available_type: Union[type, Tuple],
-    variable_name: Optional[str] = None,
-    error_message: Optional[str] = None
-):
-    """Validate value type and if not, raise error."""
-    if not isinstance(value, available_type):
-        if not isinstance(available_type, tuple):
-            available_type = [available_type]
-        if error_message is not None:
-            message = error_message
-        elif variable_name is not None:
-            message = (
-                f"{variable_name} should be " +
-                " or ".join([str(val) for val in available_type]) +
-                f". Current {variable_name} type is {type(value)}"
-            )
-        else:
-            raise TypeError
-        raise TypeError(message)
-
 
 class SingleSearchSpace:
     """
@@ -55,7 +33,7 @@ class SingleSearchSpace:
         type: str,
         min: Optional[Union[float, int]] = None,
         max: Optional[Union[float, int]] = None,
-        step: Optional[int] = None,
+        step: Optional[Union[float, int]] = None,
         log_base: Optional[int] = 2,
         choice_list: Optional[Union[List, Tuple]] = None
     ):
@@ -90,7 +68,7 @@ class SingleSearchSpace:
 
             if self.min >= self.max:
                 raise ValueError(
-                    "max value should be bigger than min value.\n"
+                    "max value should be greater than min value.\n"
                     f"max value : {self.max} / min value : {self.min}"
                 )
 
@@ -98,12 +76,12 @@ class SingleSearchSpace:
                 _check_type(self.log_base, int, "log_base")
                 if self.log_base <= 1:
                     raise ValueError(
-                        "log base should be bigger than 1.\n"
+                        "log base should be greater than 1.\n"
                         f"your log base value is {self.log_base}."
                     )
                 if self.min <= 0:
                     raise ValueError(
-                        "If you use log scale, min value should be bigger than 0.\n"
+                        "If you use log scale, min value should be greater than 0.\n"
                         f"your min value is {self.min}"
                     )
             if self.use_quantized_step():
@@ -111,10 +89,10 @@ class SingleSearchSpace:
                     raise ValueError(
                         f"The {self.type} type requires step value. But it doesn't exists"
                     )
-                _check_type(self.step, int, "step")
+                _check_type(self.step, (float, int), "step")
                 if self.step > self.max - self.min:
                     raise ValueError(
-                        "Difference between min and max is bigger than step.\n"
+                        "Difference between min and max is greater than step.\n"
                         f"Current value is min : {self.min}, max : {self.max}, step : {self.step}"
                     )
 
@@ -209,7 +187,7 @@ class SearchSpace:
         self,
         search_space: Dict[str, Dict[str, Any]],
     ):
-        self.search_space = {}
+        self.search_space: Dict[str, SingleSearchSpace] = {}
 
         _check_type(search_space, dict, "search_space")
         for key, val in search_space.items():
@@ -222,6 +200,7 @@ class SearchSpace:
                 if val["param_type"] == "choice":
                     args["choice_list"] = val["range"]
                 else:
+                    _check_type(val["range"], list, "range")
                     if len(val) != 2:
                         logger.warning("If there is the range in keys, then other values are ignored.")
                     try:

@@ -304,7 +304,7 @@ class AsyncHyperBand(HpoBase):
 
             # Check if the new config is duplicated
             while duplicated is True:
-                config = self.get_real_config(self.optimizer.suggest(self.uf))
+                config = self.search_space.get_real_config(self.optimizer.suggest(self.uf))
                 duplicated = self.check_duplicated_config(config)
                 retry_count += 1
 

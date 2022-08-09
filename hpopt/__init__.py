@@ -5,8 +5,6 @@
 from .utils import (
     Status,
     create,
-    createDummyOpt,
-    createHpoDataset,
     finalize_trial,
     get_best_score,
     get_best_score_with_num_imgs,
@@ -25,8 +23,6 @@ __all__ = [
     "get_current_status",
     "get_previous_status",
     "create",
-    "createHpoDataset",
-    "createDummyOpt",
     "SearchSpace",
     "Status",
     "get_status_path",
