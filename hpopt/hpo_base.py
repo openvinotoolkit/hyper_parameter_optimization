@@ -7,12 +7,12 @@ import time
 import os
 import json
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict, Any, Union
 
 import hpopt
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
-from hpopt.utils import _check_type
+from hpopt.utils import _check_type, _check_mode_input, _check_positive
 
 logger = get_logger()
 
@@ -58,7 +58,6 @@ class HpoBase(ABC):
         search_space: Dict[str, Dict[str, Any]],
         save_path: str = "/tmp/hpopt",
         mode: str = "max",
-        num_init_trials: int = 5,
         num_trials: Optional[int] = None,
         num_workers: int = 1,
         num_full_iterations: int = 1,
@@ -66,7 +65,7 @@ class HpoBase(ABC):
         full_dataset_size: int = 0,
         metric: str = "mAP",
         expected_time_ratio: Union[int, float] = 4,
-        max_iterations: Optional[int] = None,
+        maximum_resource: Optional[Union[int, float]] = None,
         max_time=None,
         resources_per_trial=None,
         subset_ratio: Optional[Union[float, int]] = None,
@@ -75,67 +74,29 @@ class HpoBase(ABC):
         batch_size_name=None,
         verbose: int = 0,
         resume: bool = False,
+        prior_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
     ):
-
-        if mode not in ["min", "max"]:
-            raise ValueError("'mode' should be one of 'min' or 'max'.")
-
+        _check_mode_input(mode)
         _check_type(expected_time_ratio, (float, int), "expected_time_ratio")
-        if expected_time_ratio <= 0:
-            ValueError(
-                "expected_time_ratio should be positive."
-                f" Your value is {expected_time_ratio}"
-            )
-
+        _check_positive(expected_time_ratio, "expected_time_ratio")
         _check_type(full_dataset_size, int, "full_dataset_size")
-        if full_dataset_size < 0:
-            ValueError(
-                "full_dataset_size should be greater than or equal to 0."
-                f"Your value is {full_dataset_size}."
-            )
-
+        _check_positive(full_dataset_size, "full_dataset_size")
         _check_type(num_full_iterations, int, "num_full_iterations")
-        if num_full_iterations < 1:
-            raise ValueError(
-                "num_full_iterations should be positive."
-                f" Your value is {num_full_iterations}"
-            )
-
-        _check_type(non_pure_train_ratio, float, "non_pure_train_ratio")
+        _check_positive(num_full_iterations, "num_full_iterations")
+        _check_type(non_pure_train_ratio, "non_pure_train_ratio", float)
         if not (0 < non_pure_train_ratio < 1):
             raise ValueError(
                 "non_pure_train_ratio should be between 0 and 1."
                 f" Your value is {non_pure_train_ratio}"
             )
-
-        _check_type(num_init_trials, int, "num_init_trials")
-        if num_init_trials < 1:
-            raise ValueError(
-                "num_init_trials should be positive."
-                f" Your value is {num_init_trials}"
-            )
-
-        if max_iterations is not None:
-            _check_type(max_iterations, int, "max_iterations")
-            if max_iterations < 1:
-                raise ValueError(
-                    "max_iterations should be positive."
-                    f" Your value is {max_iterations}"
-                )
-
+        if maximum_resource is not None:
+            _check_type(maximum_resource, (float, int), "maximum_resource")
+            _check_positive(maximum_resource, "maximum_resource")
         if num_trials is not None:
             _check_type(num_trials, int, "num_trials")
-            if num_trials < 1:
-                raise ValueError(
-                    "num_trials should be positive." f" Your value is {num_trials}"
-                )
-
-        _check_type(num_workers, int, "num_workers")
-        if num_workers < 1:
-            raise ValueError(
-                "num_workers should be positive." f" Your value is {num_workers}"
-            )
-
+            _check_positive(num_trials, "num_trials")
+        _check_type(num_workers, int)
+        _check_positive(num_workers, "num_workers")
         if subset_ratio is not None:
             _check_type(subset_ratio, (float, int), "subset_ratio")
             if not (0 < subset_ratio <= 1.0):
@@ -143,7 +104,6 @@ class HpoBase(ABC):
                     "subset_ratio should be greater than 0 and lesser than or equal to 1."
                     f" Your value is {subset_ratio}"
                 )
-
         if not hasattr(image_resize, "__getitem__"):
             raise TypeError("image_resize should be able to accessible by index.")
         elif len(image_resize) < 2:
@@ -154,14 +114,13 @@ class HpoBase(ABC):
         self.save_path = save_path
         self.search_space = SearchSpace(search_space)
         self.mode = mode
-        self.num_init_trials = num_init_trials
         self.num_trials = num_trials
         self.num_workers = num_workers
         self.num_full_iterations = num_full_iterations
         self.non_pure_train_ratio = non_pure_train_ratio
         self.full_dataset_size = full_dataset_size
         self.expected_time_ratio = expected_time_ratio
-        self.max_iterations = max_iterations
+        self.maximum_resource = maximum_resource
         self.max_time = max_time
         self.resources_per_trial = resources_per_trial
         self.subset_ratio = subset_ratio
@@ -172,6 +131,7 @@ class HpoBase(ABC):
         self.hpo_status: dict = {}
         self.metric = metric
         self.batch_size_name = batch_size_name
+        self.prior_hyper_parameters = prior_hyper_parameters
 
     def save_results(self):
         """Sync the current status to the file system."""
@@ -279,13 +239,13 @@ class HpoBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def update_scores(self):
-        raise NotImplementedError
-
-    @abstractmethod
     def auto_config(self):
         raise NotImplementedError
 
     @abstractmethod
     def get_progress(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def report(self, score, trial_id):
         raise NotImplementedError

@@ -276,3 +276,12 @@ class SearchSpace:
             )
 
         return bayesopt_space
+
+    def convert_from_zero_one_scale_to_real_space(self, config):
+        for key, val in config.items():
+            lower = self.search_space[key].lower_space()
+            upper = self.search_space[key].upper_space()
+            val = (upper - lower) * val + lower
+            config[key] = val
+
+        return self.get_real_config(config)

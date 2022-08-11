@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from .utils import (
+from hpopt.hpo_ui import (
     Status,
     create,
     finalize_trial,

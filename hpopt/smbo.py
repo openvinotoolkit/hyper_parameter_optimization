@@ -12,6 +12,7 @@ from bayes_opt import BayesianOptimization, UtilityFunction
 import hpopt
 from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
+from hpopt.utils import _check_type
 
 logger = get_logger()
 
@@ -31,6 +32,7 @@ class Smbo(HpoBase):
     """
     def __init__(
         self,
+        num_init_trials: int = 5,
         early_stop: Optional[bool] = None,
         kappa: Union[float, int] = 2.576,
         kappa_decay: int = 1,
@@ -41,6 +43,14 @@ class Smbo(HpoBase):
         super(Smbo, self).__init__(**kwargs)
         self.updatable_schedule = False
         self.early_stop = early_stop
+
+        _check_type(num_init_trials, int, "num_init_trials")
+        if num_init_trials < 1:
+            raise ValueError(
+                "num_init_trials should be positive."
+                f" Your value is {num_init_trials}"
+            )
+        self.num_init_trials = num_init_trials
 
         # HPO auto configurator
         if (
