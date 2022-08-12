@@ -1,5 +1,6 @@
 import math
 import pytest
+import copy
 
 from hpopt.search_space import SingleSearchSpace, SearchSpace
 
@@ -8,182 +9,416 @@ NOT_CATEGORICAL_TYPE = ["uniform", "loguniform", "quniform", "qloguniform"]
 USE_LOG_SCALE_TYPE = ["loguniform", "qloguniform"]
 USE_QUANTIZED_STEP_TYPE = ["quniform", "qloguniform"]
 
-def make_single_search_space_class(
-    type="uniform",
-    min=2, 
-    max=100,
-    step=2,
-    log_base=2,
-    choice_list=[1,2,3]
-):
-    return SingleSearchSpace(type, min, max, step, log_base, choice_list)
+def make_single_search_space_uniform_good_arguments():
+    return [
+        {"type" : "uniform", "min" : 1, "max" : 100},
+        {"type" : "uniform", "min" : 1.12, "max" : 53.221},
+        {"type" : "uniform", "min" : -300, "max" : -299},
+        {"type" : "uniform", "min" : -12.543, "max" : 15.233},
+    ]
+
+def add_step_from_args(args, type_name=None):
+    new_args = []
+    for arg in args:
+        step = (arg["max"] - arg["min"]) / 2
+        arg["step"] = step
+        if type_name is not None:
+            arg["type"] = type_name
+        new_args.append(arg)
+
+    return new_args
+
+def add_log_base_from_args(args, type_name):
+    new_args = []
+    for log_base in [2, 10]:
+        for arg in args:
+            if arg["min"] <= 0:
+                continue
+            arg["log_base"] = log_base
+            if type_name is not None:
+                arg["type"] = type_name
+            new_args.append(arg)
+
+    return new_args
+    
+def make_single_search_space_quniform_good_arguments():
+    return add_step_from_args(
+        make_single_search_space_uniform_good_arguments(),
+        "quniform"
+    )
+
+def make_single_search_space_loguniform_good_arguments():
+    return add_log_base_from_args(
+        make_single_search_space_uniform_good_arguments(),
+        "loguniform"
+    )
+        
+def make_single_search_space_qloguniform_good_arguments():
+    return add_log_base_from_args(
+        make_single_search_space_quniform_good_arguments(),
+        "qloguniform"
+    )
+
+def make_single_search_space_choice_good_arguments():
+    return [
+        {"type" : "choice", "choice_list" : ("abc", "def")},
+        {"type" : "choice", "choice_list" : [1,2,3]}
+    ]
+
+MAKE_GOOD_ARGS = {
+    "uniform" : make_single_search_space_uniform_good_arguments,
+    "quniform" : make_single_search_space_quniform_good_arguments,
+    "loguniform" : make_single_search_space_loguniform_good_arguments,
+    "qloguniform" : make_single_search_space_qloguniform_good_arguments,
+    "choice" : make_single_search_space_choice_good_arguments
+}
+
+def get_wrong_arg(original_arg, attr_names, values, errors):
+    wrong_arg = copy.deepcopy(original_arg)
+    if not isinstance(attr_names, (list, tuple)):
+        attr_names = [attr_names]
+        values = [values]
+
+    for attr_name, value in zip(attr_names, values):
+        wrong_arg[attr_name] = value
+    wrong_arg["error"] = errors
+
+    return wrong_arg
+
+def make_arg_minmax_wrong(arg):
+    args = []
+    # wrong type
+    for attr_name in ["min", "max"]:
+        for val in ["string", [1,2], {1:2}]:
+            args.append(get_wrong_arg(arg, attr_name, val, TypeError))
+        
+    # value is None
+    for attr_name in ["min", "max"]:
+        args.append(get_wrong_arg(arg, attr_name, None, (ValueError, TypeError)))
+
+    # min is greater or same than max
+    for val in [(3, 1), (5.5, 2.3), (1, 1), (2.0, 2.0)]:
+        args.append(get_wrong_arg(arg, ["min", "max"], val, ValueError))
+
+    # value is minus although using log scale
+    if "log_base" in arg:
+        for val in [(-20, -12), (-12.124, 10), (0, 3)]:
+            args.append(get_wrong_arg(arg, ["min", "max"], val, ValueError))
+
+    return args
+
+def make_arg_step_wrong(arg):
+    args = []
+
+    # wrong type
+    for val in ["string", [1,2], {1:2}]:
+        args.append(get_wrong_arg(arg, "step", val, TypeError))
+
+    # vlaue is None
+    args.append(get_wrong_arg(arg, "step", None, (TypeError, ValueError)))
+
+    # step is too big
+    args.append(
+        get_wrong_arg(arg, "step", arg["max"] - arg["min"] + 1, (TypeError, ValueError))
+    )
+
+    return args
+
+def make_arg_logbase_wrong(arg):
+    args = []
+
+    # wrong type
+    for val in ["string", [1,2], {1:2}, 3.52]:
+        args.append(get_wrong_arg(arg, "log_base", val, TypeError))
+
+    # too small value
+    for val in [1, 0, -1]:
+        args.append(get_wrong_arg(arg, "log_base", val, ValueError))
+        
+    return args
+
+def make_arg_choicelist_wrong(arg):
+    args = []
+
+    # wrong type
+    for val in [1, 1.2, "atr", {1:2, 2:4}]:
+        args.append(get_wrong_arg(arg, "choice_list", val, TypeError))
+        
+    # vlaue is None
+    args.append(get_wrong_arg(arg, "choice_list", None, (TypeError, ValueError)))
+    # few elements
+
+    for val in [[], [1]]:
+        args.append(get_wrong_arg(arg, "choice_list", val, ValueError))
+
+    return args
+
+def make_arg_type_wrong(arg):
+    args = []
+
+    # wrong type
+    for val in ["wrong_type", 12, 1.24, [1,2]]:
+        args.append(get_wrong_arg(arg, "type", val, ValueError))
+
+    return args
 
 class TestSingleSearchSpace:
+    @pytest.mark.parametrize("type", ALL_TYPE)
+    def test_init_with_good_input(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            search_space_class = SingleSearchSpace(**arg)
+
     @pytest.mark.parametrize("type", NOT_CATEGORICAL_TYPE)
-    @pytest.mark.parametrize("min,max", [(1,100), (1.12, 53.221)])
-    @pytest.mark.parametrize("step", [2, 10])
-    @pytest.mark.parametrize("log_base", [2, 10, None])
-    def test_init_on_not_choice_type_with_good_input(self, type, min, max, step, log_base):
-        if log_base is None:
-            search_space_class = SingleSearchSpace(type, min, max, step)
-        else:
-            search_space_class = SingleSearchSpace(type, min, max, step, log_base)
-
-    @pytest.mark.parametrize("choice_list", [("abc", "def"), [1,2,3]])
-    def test_init_on_choice_type_with_good_input(self, choice_list):
-        search_space_class = SingleSearchSpace("choice", choice_list=choice_list)
-
-    @pytest.mark.parametrize("val", ["string", [1,2], {1:2}])
-    def test_init_wrong_min_max_type(self, val):
-        # check min
-        with pytest.raises(TypeError):
-            search_space_class = SingleSearchSpace("uniform", val, 100, 2, 2)
-        # check max
-        with pytest.raises(TypeError):
-            search_space_class = SingleSearchSpace("uniform", 2, val, 2, 2)
-
-    @pytest.mark.parametrize("step", ["string", [1,2], {1:2}])
-    def test_init_wrong_step_type(self, step):
-        with pytest.raises(TypeError):
-            search_space_class = SingleSearchSpace("qloguniform", 2, 100, step, 2)
-
-    @pytest.mark.parametrize("log_base", ["string", [1,2], {1:2}, 1.2])
-    def test_init_wrong_log_base_type(self, log_base):
-        with pytest.raises(TypeError):
-            search_space_class = SingleSearchSpace("qloguniform", 2, 100, 2, log_base)
-
-    @pytest.mark.parametrize("choice_list", [1, 1.2, "atr", {1:2, 2:4}])
-    def test_init_wrong_choice_list_type(self, choice_list):
-        with pytest.raises(TypeError):
-            search_space_class = SingleSearchSpace("choice", choice_list)
-
-    @pytest.mark.parametrize("min,max", [(None, 100), (2, None), (None, None)])
-    def test_init_no_min_max_value(self, min, max):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace("uniform", min, max)
+    def test_init_wrong_minmax_arg(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            wrong_args = make_arg_minmax_wrong(arg)
+            for wrong_arg in wrong_args:
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    search_space_class = SingleSearchSpace(**wrong_arg)
 
     @pytest.mark.parametrize("type", USE_QUANTIZED_STEP_TYPE)
-    def test_init_no_step_value(self, type):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace(type, 2, 100, None, 2)
-
-    @pytest.mark.parametrize("min,max", [(3, 1), (5.5, -12.3), (1, 1), (2.0, 2.0)])
-    def test_init_min_is_bigger_or_same_than_max(self, min, max):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace("uniform", min, max)
-
-    @pytest.mark.parametrize("type", USE_LOG_SCALE_TYPE)
-    @pytest.mark.parametrize("min,max", [(-20, -12), (-12.124, 10), (0, 3)])
-    def test_minus_value_in_log_type(self, type, min, max):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace(type, min, max, step=2, log_base=2)
-
-
-    @pytest.mark.parametrize("type", ["wrong_type", 12, 1.24, [1,2]])
-    def test_init_with_wrong_type(self, type):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace(type, 1, 100, 2, 2, [1,2])
-
-    @pytest.mark.parametrize("type,min,max,step", [("qloguniform", 1, 2, 100), ("quniform",-0.1, 0.1, 1)])
-    def test_init_step_is_too_big(self, type, min, max, step):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace(type, min, max, step, 2)
+    def test_init_wrong_step_arg(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            wrong_args = make_arg_step_wrong(arg)
+            for wrong_arg in wrong_args:
+                print(wrong_arg)
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    search_space_class = SingleSearchSpace(**wrong_arg)
 
     @pytest.mark.parametrize("type", USE_LOG_SCALE_TYPE)
-    @pytest.mark.parametrize("log_base", [1, 0, -1])
-    def test_init_log_base_is_wrong_value(self, type, log_base):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace(type, 1, 100, 2, log_base)
+    def test_init_wrong_log_base_arg(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            wrong_args = make_arg_logbase_wrong(arg)
+            for wrong_arg in wrong_args:
+                print(wrong_arg)
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    search_space_class = SingleSearchSpace(**wrong_arg)
 
-    @pytest.mark.parametrize("choice_list", [[], [1]])
-    def test_init_empty_or_single_element_choice_list(self,choice_list):
-        with pytest.raises(ValueError):
-            search_space_class = SingleSearchSpace("choice", choice_list=choice_list)
+    def test_init_wrong_choice_list_arg(self):
+        args = MAKE_GOOD_ARGS["choice"]()
+        for arg in args:
+            wrong_args = make_arg_choicelist_wrong(arg)
+            for wrong_arg in wrong_args:
+                print(wrong_arg)
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    search_space_class = SingleSearchSpace(**wrong_arg)
+
+    def test_init_with_wrong_type(self):
+        for type in ALL_TYPE:
+            args = MAKE_GOOD_ARGS[type]()
+            for arg in args:
+                wrong_args = make_arg_type_wrong(arg)
+                for wrong_arg in wrong_args:
+                    errors = wrong_arg["error"]
+                    del wrong_arg["error"]
+                    with pytest.raises(errors):
+                        search_space_class = SingleSearchSpace(**wrong_arg)
+
+    def test_set_value_normally(self):
+        args = []
+        for type in ALL_TYPE:
+            args.extend(MAKE_GOOD_ARGS[type]())
+        cur_arg = args.pop(0)
+        for new_arg in args:
+            sss = SingleSearchSpace(**cur_arg)
+            sss.set_value(**new_arg)
+            cur_arg = new_arg
+
+    @pytest.mark.parametrize("type", NOT_CATEGORICAL_TYPE)
+    def test_set_value_wrong_minmax_arg(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            wrong_args = make_arg_minmax_wrong(arg)
+            for wrong_arg in wrong_args:
+                if wrong_arg["min"] is None or wrong_arg["max"] is None:
+                    continue
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                print(wrong_arg)
+                with pytest.raises(errors):
+                    sss.set_value(**wrong_arg)
+
+    @pytest.mark.parametrize("type", USE_QUANTIZED_STEP_TYPE)
+    def test_set_value_wrong_step_arg(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            wrong_args = make_arg_step_wrong(arg)
+            for wrong_arg in wrong_args:
+                if wrong_arg["step"] is None:
+                    continue
+                print(wrong_arg)
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    sss.set_value(**wrong_arg)
+
+    @pytest.mark.parametrize("type", USE_LOG_SCALE_TYPE)
+    def test_set_value_wrong_log_base_arg(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            wrong_args = make_arg_logbase_wrong(arg)
+            for wrong_arg in wrong_args:
+                if wrong_arg["log_base"] is None:
+                    continue
+                print(wrong_arg)
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    sss.set_value(**wrong_arg)
+
+    def test_set_value_wrong_choice_list_arg(self):
+        args = MAKE_GOOD_ARGS["choice"]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            wrong_args = make_arg_choicelist_wrong(arg)
+            for wrong_arg in wrong_args:
+                if wrong_arg["choice_list"] is None:
+                    continue
+                print(wrong_arg)
+                errors = wrong_arg["error"]
+                del wrong_arg["error"]
+                with pytest.raises(errors):
+                    sss.set_value(**wrong_arg)
+
+    def test_set_value_with_wrong_type(self):
+        for type in ALL_TYPE:
+            args = MAKE_GOOD_ARGS[type]()
+            for arg in args:
+                sss = SingleSearchSpace(**arg)
+                wrong_args = make_arg_type_wrong(arg)
+                for wrong_arg in wrong_args:
+                    errors = wrong_arg["error"]
+                    del wrong_arg["error"]
+                    with pytest.raises(errors):
+                        sss.set_value(**wrong_arg)
+
+    def test_align_min_max_to_choice_list_if_categorical(self):
+        args = MAKE_GOOD_ARGS["choice"]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            sss._min = -100
+            sss._max = -100
+            sss._align_min_max_to_choice_list_if_categorical()
+            assert sss.min == 0
+            assert sss.max == len(arg["choice_list"]) - 1
 
     @pytest.mark.parametrize("type", ALL_TYPE)
     def test_is_categorical(self, type):
-        sss = make_single_search_space_class(type)
-        if type in NOT_CATEGORICAL_TYPE:
-            assert sss.is_categorical() == False
-        else:
-            assert sss.is_categorical() == True
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            if type in NOT_CATEGORICAL_TYPE:
+                assert sss.is_categorical() == False
+            else:
+                assert sss.is_categorical() == True
 
     @pytest.mark.parametrize("type", ALL_TYPE)
     def test_use_quantized_step(self, type):
-        sss = make_single_search_space_class(type)
-        if type in USE_QUANTIZED_STEP_TYPE:
-            assert sss.use_quantized_step() == True
-        else:
-            assert sss.use_quantized_step() == False
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            if type in USE_QUANTIZED_STEP_TYPE:
+                assert sss.use_quantized_step() == True
+            else:
+                assert sss.use_quantized_step() == False
 
     @pytest.mark.parametrize("type", ALL_TYPE)
     def test_use_log_scale(self, type):
-        sss = make_single_search_space_class(type)
-        if type in USE_LOG_SCALE_TYPE:
-            assert sss.use_log_scale() == True
-        else:
-            assert sss.use_log_scale() == False
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            if type in USE_LOG_SCALE_TYPE:
+                assert sss.use_log_scale() == True
+            else:
+                assert sss.use_log_scale() == False
 
     @pytest.mark.parametrize("type", ALL_TYPE)
-    @pytest.mark.parametrize("min,max", [(10, 100), (12, 30), (124.12, 12122.151)])
-    @pytest.mark.parametrize("log_base", [2, 10])
-    def test_lower_space_upper_space(self, type, min, max, log_base):
-        sss = make_single_search_space_class(type, min=min, max=max, log_base=log_base)
-        if type in USE_LOG_SCALE_TYPE:
-            assert sss.lower_space() == math.log(min, log_base)
-            assert sss.upper_space() == math.log(max, log_base)
-        elif type in NOT_CATEGORICAL_TYPE:
-            assert sss.lower_space() == sss.min
-            assert sss.upper_space() == sss.max
-        else:
-            assert sss.lower_space() == 0
-            assert sss.upper_space() == len(sss.choice_list) - 1
+    def test_lower_space_upper_space(self, type):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            if type == "choice":
+                assert sss.lower_space() == 0
+                assert sss.upper_space() == len(sss.choice_list) - 1
+            else:
+                min = arg["min"]
+                max = arg["max"]
+                if type in USE_LOG_SCALE_TYPE:
+                    log_base = arg["log_base"]
+                    assert sss.lower_space() == math.log(min, log_base)
+                    assert sss.upper_space() == math.log(max, log_base)
+                else:
+                    assert sss.lower_space() == min
+                    assert sss.upper_space() == max
 
-    @pytest.mark.parametrize("type", NOT_CATEGORICAL_TYPE)
+    @pytest.mark.parametrize("type", ALL_TYPE)
     @pytest.mark.parametrize("number", [2.3, 15])
-    @pytest.mark.parametrize("step", [2, 3, 7])
-    @pytest.mark.parametrize("log_base", [2, 10])
-    def test_space_to_real_not_categorical_type(self, type, number, step, log_base):
-        sss = make_single_search_space_class(type, step=step, log_base=log_base)
-        ret = sss.space_to_real(number)
-        expected_ret = number
+    def test_space_to_real(self, type, number):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            if type == "choice":
+                choice_list = arg["choice_list"]
+                ret = sss.space_to_real(number)
+                expected_ret = min(max(int(number), 0), len(choice_list)-1)
+                assert ret == sss.choice_list[expected_ret]
+            else:
+                ret = sss.space_to_real(number)
+                expected_ret = number
 
-        if type in USE_LOG_SCALE_TYPE:
-            expected_ret = log_base ** expected_ret
-        if type in USE_QUANTIZED_STEP_TYPE:
-            gap = sss.min % step
-            expected_ret = round((expected_ret - gap) / step) * step  + gap
+                if type in USE_LOG_SCALE_TYPE:
+                    log_base = arg["log_base"]
+                    expected_ret = log_base ** expected_ret
+                if type in USE_QUANTIZED_STEP_TYPE:
+                    step = arg["step"]
+                    gap = sss.min % step
+                    expected_ret = round((expected_ret - gap) / step) * step  + gap
+                assert ret == expected_ret
 
-        assert ret == expected_ret
-
-    @pytest.mark.parametrize("number,choice_list", [(2, [1,2,3]), (10, [1,2]), (-3, [1,2])])
-    def test_space_to_real_categorical_type(self, number, choice_list):
-        sss = make_single_search_space_class("choice", choice_list=choice_list)
-        ret = sss.space_to_real(number)
-        expected_ret = min(max(int(number), 0), len(choice_list)-1)
-        assert ret == sss.choice_list[expected_ret]
-
+    @pytest.mark.parametrize("type", ALL_TYPE)
     @pytest.mark.parametrize("number", ["string", [1,2], {1:2}])
-    def test_space_to_real_wrong_type(self, number):
-        sss = make_single_search_space_class()
-        with pytest.raises(TypeError):
-            sss.real_to_space(number)
+    def test_space_to_real_wrong_type(self, type, number):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            with pytest.raises(TypeError):
+                sss.real_to_space(number)
 
     @pytest.mark.parametrize("type", ALL_TYPE)
     @pytest.mark.parametrize("number", [10, 512.3])
-    @pytest.mark.parametrize("log_base", [2, 10])
-    def test_real_to_space(self, type, log_base, number):
-        sss = make_single_search_space_class(type, log_base=log_base)
-        if type in USE_LOG_SCALE_TYPE:
-            assert sss.real_to_space(number) == math.log(number, log_base)
-        else:
-            assert sss.real_to_space(number) == number
+    def test_real_to_space(self, type, number):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            if type in USE_LOG_SCALE_TYPE:
+                log_base = arg["log_base"]
+                assert sss.real_to_space(number) == math.log(number, log_base)
+            else:
+                assert sss.real_to_space(number) == number
 
+    @pytest.mark.parametrize("type", ALL_TYPE)
     @pytest.mark.parametrize("number", ["string", [1,2], {1:2}])
-    def test_real_to_space_wrong_type(self, number):
-        sss = make_single_search_space_class()
-        with pytest.raises(TypeError):
-            sss.real_to_space(number)
+    def test_real_to_space_wrong_type(self, type, number):
+        args = MAKE_GOOD_ARGS[type]()
+        for arg in args:
+            sss = SingleSearchSpace(**arg)
+            with pytest.raises(TypeError):
+                sss.real_to_space(number)
 
 class TestSearchSpace:
     @staticmethod
@@ -379,3 +614,21 @@ class TestSearchSpace:
             assert len(val) == 2
             min_val, max_val = val
             assert min_val < max_val
+
+    def test_convert_from_zero_one_scale_to_real_space_with_good_args(
+        self,
+        search_space_with_all_types
+    ):
+        config = {}
+        for key in search_space_with_all_types:
+            config[key] = 0.5
+        real_space = search_space_with_all_types.convert_from_zero_one_scale_to_real_space(config)
+
+    @pytest.mark.parametrize("config", ["wrong_value", [1,3,4], (1,2)])
+    def test_convert_from_zero_one_scale_to_real_space_with_bad_arg_type(
+        self,
+        search_space_with_all_types,
+        config
+    ):
+        with pytest.raises(AttributeError):
+            real_space = search_space_with_all_types.convert_from_zero_one_scale_to_real_space(config)

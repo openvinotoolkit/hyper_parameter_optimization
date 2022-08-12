@@ -15,14 +15,6 @@ from hpopt.utils import (
 logger = get_logger()
 
 
-def _check_reduction_factor_value(reduction_factor: int):
-    if reduction_factor < 2:
-        raise ValueError(
-            "reduction_factor should be at least 2.\n"
-            f"your value : {reduction_factor}"
-            )
-
-
 class Trial:
     def __init__(
         self,
@@ -70,10 +62,16 @@ class Trial:
         else:
             return min(score_arr)
 
-    def rise_in_rung(self, new_iter):
+    def rise_in_rung(self, new_iter: int):
         self.rung = self.rung + 1
         self.set_iterations(new_iter)
 
+def _check_reduction_factor_value(reduction_factor: int):
+    if reduction_factor < 2:
+        raise ValueError(
+            "reduction_factor should be at least 2.\n"
+            f"your value : {reduction_factor}"
+            )
 
 class Rung:
     def __init__(
@@ -141,7 +139,7 @@ class Rung:
                 return False
         return True
 
-    def is_available_to_promote(self):
+    def has_promotable_trial(self):
         num_finished_trial = 0
         num_promoted_trial = 0
         for trial in self._trials:
@@ -158,7 +156,6 @@ class Rung:
                 self._is_done()
                 and self._num_required_trial // self._reduction_factor > num_promoted_trial
             )
-
 
 class Bracket:
     def __init__(
@@ -246,7 +243,7 @@ class Bracket:
         return new_trial
 
     def _promote_trial(self, rung_idx: int):
-        if (not self._rungs[rung_idx].is_available_to_promote()
+        if (not self._rungs[rung_idx].has_promotable_trial()
             or self.max_rung == rung_idx
         ):
             return None
@@ -261,7 +258,7 @@ class Bracket:
     def get_next_sample(self):
         next_sample = None
         for current_rung in range(self.max_rung-1, -1, -1):
-            if self._rungs[current_rung].is_available_to_promote():
+            if self._rungs[current_rung].has_promotable_trial():
                 next_sample = self._promote_trial(current_rung)
                 break
         if next_sample is None:
@@ -326,7 +323,7 @@ class HyperBand(HpoBase):
         self._asynchronous_bracket = asynchronous_bracket
         self._brackets: List[Bracket] = []
         # bracket order is the opposite of order of paper's.
-        # this is for running default hyper parmeters with abundnat resource. 
+        # this is for running default hyper parmeters with abundnat resource.
         for idx in range(self._max_bracket + 1):
             num_bracket_trials = math.ceil(
                 (self._max_bracket + 1)
@@ -357,10 +354,11 @@ class HyperBand(HpoBase):
         hyper_parameter_configurations = []
         configurations = latin_hypercube_sample(len(self.search_space), num)
         for idx, config in enumerate(configurations):
+            config_with_key = {key : config[idx] for idx, key in enumerate(self.search_space)}
             hyper_parameter_configurations.append[
                 Trial(
                     trial_id_prefix + str(idx),
-                    self.search_space.convert_from_zero_one_scale_to_real_space(config)
+                    self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key)
                 )
             ]
         return hyper_parameter_configurations

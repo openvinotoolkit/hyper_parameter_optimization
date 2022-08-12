@@ -2,7 +2,7 @@ import math
 from typing import Any, Dict, List, Optional, Union, Tuple
 
 from hpopt.logger import get_logger
-from hpopt.utils import _check_type
+from hpopt.utils import _check_type, _check_positive
 
 logger = get_logger()
 
@@ -37,112 +37,176 @@ class SingleSearchSpace:
         log_base: Optional[int] = 2,
         choice_list: Optional[Union[List, Tuple]] = None
     ):
-        self.type = type
-        self.min = min
-        self.max = max
-        self.step = step
-        self.log_base = log_base
-        self.choice_list = choice_list
+        self._type = type
+        if self.is_categorical():
+            self._choice_list = choice_list
+            self._align_min_max_to_choice_list_if_categorical()
+        else:
+            self._min = min 
+            self._max = max
+            self._step = step
+            self._log_base = log_base
+        self._check_all_value_is_right()
 
-        if self.type not in AVAILABLE_SEARCH_SPACE_TYPE:
+    @property
+    def type(self):
+        return self._type
+    
+    @property
+    def min(self):
+        return self._min
+    
+    @property
+    def max(self):
+        return self._max
+    
+    @property
+    def step(self):
+        return self._step
+    
+    @property
+    def log_base(self):
+        return self._log_base
+    
+    @property
+    def choice_list(self):
+        return self._choice_list
+    
+    def set_value(
+        self,
+        type: Optional[str] = None,
+        min: Optional[Union[float, int]] = None,
+        max: Optional[Union[float, int]] = None,
+        step: Optional[Union[float, int]] = None,
+        log_base: Optional[int] = None,
+        choice_list: Optional[Union[List, Tuple]] = None
+    ):
+        if type is not None:
+            self._type = type
+        if min is not None:
+            self._min = min 
+        if max is not None:
+            self._max = max
+        if step is not None:
+            self._step = step
+        if log_base is not None:
+            self._log_base = log_base
+        if choice_list is not None:
+            self._choice_list = choice_list
+        if self.is_categorical():
+            self._align_min_max_to_choice_list_if_categorical()
+
+        self._check_all_value_is_right()
+
+    def _align_min_max_to_choice_list_if_categorical(self):
+        if self.is_categorical():
+            self._min = 0
+            self._max = len(self._choice_list) - 1
+
+    def _check_all_value_is_right(self):
+        if self._type not in AVAILABLE_SEARCH_SPACE_TYPE:
             raise ValueError(
                 f"type should be one of {', '.join(AVAILABLE_SEARCH_SPACE_TYPE)}. "
-                f"But your argument is {self.type}"
+                f"But your argument is {self._type}"
             )
 
         if self.is_categorical():
-            _check_type(self.choice_list, (list, tuple), "choice_list")
-            if len(choice_list) <= 1:
+            _check_type(self._choice_list, (list, tuple), "choice_list")
+            if len(self._choice_list) <= 1:
                 raise ValueError("If type is choice, choice_list should have more than one element")
-            self.choice_list = choice_list
-            self.min = 0
-            self.max = len(self.choice_list) - 1
+            if self._min != 0:
+                raise ValueError("if type is categorical, min should be 0.")
+            if self._max != len(self._choice_list) -1:
+                raise ValueError(
+                    "if type is categorical, max should be last index number of choice_list."
+                )
         else:
             if min is None:
                 raise ValueError("If type isn't choice, you should set min value of search space.")
             if max is None:
                 raise ValueError("If type isn't choice, you should set max value of search space.")
 
-            _check_type(self.min, (int, float), "min")
-            _check_type(self.max, (int, float), "max")
+            _check_type(self._min, (int, float), "min")
+            _check_type(self._max, (int, float), "max")
 
-            if self.min >= self.max:
+            if self._min >= self._max:
                 raise ValueError(
                     "max value should be greater than min value.\n"
-                    f"max value : {self.max} / min value : {self.min}"
+                    f"max value : {self._max} / min value : {self._min}"
                 )
 
             if self.use_log_scale():
-                _check_type(self.log_base, int, "log_base")
-                if self.log_base <= 1:
+                _check_type(self._log_base, int, "log_base")
+                if self._log_base <= 1:
                     raise ValueError(
                         "log base should be greater than 1.\n"
-                        f"your log base value is {self.log_base}."
+                        f"your log base value is {self._log_base}."
                     )
-                if self.min <= 0:
+                if self._min <= 0:
                     raise ValueError(
                         "If you use log scale, min value should be greater than 0.\n"
-                        f"your min value is {self.min}"
+                        f"your min value is {self._min}"
                     )
             if self.use_quantized_step():
-                if self.step is None:
+                if self._step is None:
                     raise ValueError(
-                        f"The {self.type} type requires step value. But it doesn't exists"
+                        f"The {self._type} type requires step value. But it doesn't exists"
                     )
-                _check_type(self.step, (float, int), "step")
-                if self.step > self.max - self.min:
+                _check_type(self._step, (float, int), "step")
+                _check_positive(self._step, "step")
+                if self._step > self._max - self._min:
                     raise ValueError(
                         "Difference between min and max is greater than step.\n"
-                        f"Current value is min : {self.min}, max : {self.max}, step : {self.step}"
+                        f"Current value is min : {self._min}, max : {self._max}, step : {self._step}"
                     )
 
     def __repr__(self):
         if self.is_categorical():
-            return f"type: {self.type}, candidiate : {', '.join(self.choice_list)}"
+            return f"type: {self._type}, candidiate : {', '.join(self._choice_list)}"
         else:
-            rep = f"type: {self.type}, search space : {self.min} ~ {self.max}"
+            rep = f"type: {self._type}, search space : {self._min} ~ {self._max}"
             if self.use_quantized_step():
-                rep += f", step : {self.step}"
+                rep += f", step : {self._step}"
             if self.use_log_scale():
-                rep += f", log base : {self.log_base}"
+                rep += f", log base : {self._log_base}"
             return  rep
 
     def is_categorical(self):
-        return self.type == "choice"
+        return self._type == "choice"
 
     def use_quantized_step(self):
-        return self.type == "quniform" or self.type == "qloguniform"
+        return self._type == "quniform" or self._type == "qloguniform"
 
     def use_log_scale(self):
-        return self.type == "loguniform" or self.type == "qloguniform"
+        return self._type == "loguniform" or self._type == "qloguniform"
 
     def lower_space(self):
         if self.use_log_scale():
-            return math.log(self.min, self.log_base)
-        return self.min
+            return math.log(self._min, self._log_base)
+        return self._min
 
     def upper_space(self):
         if self.use_log_scale():
-            return math.log(self.max, self.log_base)
-        return self.max
+            return math.log(self._max, self._log_base)
+        return self._max
 
     def space_to_real(self, number: Union[int, float]):
         _check_type(number, (int, float), "number")
         if self.is_categorical():
-            idx = max(min(int(number), len(self.choice_list) - 1), 0)
-            return self.choice_list[idx]
+            idx = max(min(int(number), len(self._choice_list) - 1), 0)
+            return self._choice_list[idx]
         else:
             if self.use_log_scale():
-                number = self.log_base ** number
+                number = self._log_base ** number
             if self.use_quantized_step():
-                gap = self.min % self.step
-                number =  round((number - gap) / self.step) * self.step + gap
+                gap = self._min % self._step
+                number =  round((number - gap) / self._step) * self._step + gap
             return number
 
     def real_to_space(self, number: Union[int, float]):
         _check_type(number, (int, float), "number")
         if self.use_log_scale():
-            return math.log(number, self.log_base)
+            return math.log(number, self._log_base)
         return number
 
 class SearchSpace:
@@ -254,13 +318,13 @@ class SearchSpace:
                 return True
         return False
 
-    def get_real_config(self, config):
+    def get_real_config(self, config: Dict):
         real_config = {}
         for param, value in config.items():
             real_config[param] = self[param].space_to_real(value)
         return real_config
 
-    def get_space_config(self, config):
+    def get_space_config(self, config: Dict):
         space_config = {}
         for param, value in config.items():
             space_config[param] = self[param].real_to_space(value)
@@ -277,7 +341,7 @@ class SearchSpace:
 
         return bayesopt_space
 
-    def convert_from_zero_one_scale_to_real_space(self, config):
+    def convert_from_zero_one_scale_to_real_space(self, config: Dict):
         for key, val in config.items():
             lower = self.search_space[key].lower_space()
             upper = self.search_space[key].upper_space()
