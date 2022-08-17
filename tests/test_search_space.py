@@ -87,11 +87,6 @@ def get_wrong_arg(original_arg, attr_names, values, errors):
 
 def make_arg_minmax_wrong(arg):
     args = []
-    # wrong type
-    for attr_name in ["min", "max"]:
-        for val in ["string", [1,2], {1:2}]:
-            args.append(get_wrong_arg(arg, attr_name, val, TypeError))
-        
     # value is None
     for attr_name in ["min", "max"]:
         args.append(get_wrong_arg(arg, attr_name, None, (ValueError, TypeError)))
@@ -110,10 +105,6 @@ def make_arg_minmax_wrong(arg):
 def make_arg_step_wrong(arg):
     args = []
 
-    # wrong type
-    for val in ["string", [1,2], {1:2}]:
-        args.append(get_wrong_arg(arg, "step", val, TypeError))
-
     # vlaue is None
     args.append(get_wrong_arg(arg, "step", None, (TypeError, ValueError)))
 
@@ -127,10 +118,6 @@ def make_arg_step_wrong(arg):
 def make_arg_logbase_wrong(arg):
     args = []
 
-    # wrong type
-    for val in ["string", [1,2], {1:2}, 3.52]:
-        args.append(get_wrong_arg(arg, "log_base", val, TypeError))
-
     # too small value
     for val in [1, 0, -1]:
         args.append(get_wrong_arg(arg, "log_base", val, ValueError))
@@ -140,10 +127,6 @@ def make_arg_logbase_wrong(arg):
 def make_arg_choicelist_wrong(arg):
     args = []
 
-    # wrong type
-    for val in [1, 1.2, "atr", {1:2, 2:4}]:
-        args.append(get_wrong_arg(arg, "choice_list", val, TypeError))
-        
     # vlaue is None
     args.append(get_wrong_arg(arg, "choice_list", None, (TypeError, ValueError)))
     # few elements
@@ -391,15 +374,6 @@ class TestSingleSearchSpace:
                 assert ret == expected_ret
 
     @pytest.mark.parametrize("type", ALL_TYPE)
-    @pytest.mark.parametrize("number", ["string", [1,2], {1:2}])
-    def test_space_to_real_wrong_type(self, type, number):
-        args = MAKE_GOOD_ARGS[type]()
-        for arg in args:
-            sss = SingleSearchSpace(**arg)
-            with pytest.raises(TypeError):
-                sss.real_to_space(number)
-
-    @pytest.mark.parametrize("type", ALL_TYPE)
     @pytest.mark.parametrize("number", [10, 512.3])
     def test_real_to_space(self, type, number):
         args = MAKE_GOOD_ARGS[type]()
@@ -410,15 +384,6 @@ class TestSingleSearchSpace:
                 assert sss.real_to_space(number) == math.log(number, log_base)
             else:
                 assert sss.real_to_space(number) == number
-
-    @pytest.mark.parametrize("type", ALL_TYPE)
-    @pytest.mark.parametrize("number", ["string", [1,2], {1:2}])
-    def test_real_to_space_wrong_type(self, type, number):
-        args = MAKE_GOOD_ARGS[type]()
-        for arg in args:
-            sss = SingleSearchSpace(**arg)
-            with pytest.raises(TypeError):
-                sss.real_to_space(number)
 
 class TestSearchSpace:
     @staticmethod
@@ -507,14 +472,6 @@ class TestSearchSpace:
         with pytest.raises(ValueError):
             ss = SearchSpace(search_space)
 
-    @pytest.mark.parametrize("wrong_type_val", [1, 1.2, "string"])
-    def test_init_with_wrong_range_type(self, wrong_type_val):
-        search_space = self.get_search_space_depending_on_type(ALL_TYPE, True)
-        for val in search_space.values():
-            val["range"] = wrong_type_val
-        with pytest.raises(TypeError):
-            ss = SearchSpace(search_space)
-
     def test_init_both_format_exists(self):
         search_space = self.get_search_space_depending_on_type(ALL_TYPE)
         range_format = self.get_search_space_depending_on_type(ALL_TYPE, True)
@@ -574,12 +531,6 @@ class TestSearchSpace:
         with pytest.raises(KeyError):
             real_space = search_space_with_all_types.get_real_config(config)
 
-    @pytest.mark.parametrize("wrong_value", ["wrong_value", [1,3,4], (1,2)])
-    def test_get_real_config_with_wrong_value_config(self, search_space_with_all_types, wrong_value):
-        config = {"quniform_search_space" : wrong_value}
-        with pytest.raises(TypeError):
-            real_space = search_space_with_all_types.get_real_config(config)
-
     def test_get_space_config_with_proper_argument(self, search_space_with_all_types):
         # search space configuration
         log_base = 2
@@ -599,12 +550,6 @@ class TestSearchSpace:
     def test_get_space_config_with_wrong_name_config(self, search_space_with_all_types, wrong_name):
         config = {wrong_name : 3.2}
         with pytest.raises(KeyError):
-            real_space = search_space_with_all_types.get_space_config(config)
-
-    @pytest.mark.parametrize("wrong_value", ["wrong_value", [1,3,4], (1,2)])
-    def test_get_space_config_with_wrong_value_config(self, search_space_with_all_types, wrong_value):
-        config = {"quniform_search_space" : wrong_value}
-        with pytest.raises(TypeError):
             real_space = search_space_with_all_types.get_space_config(config)
 
     def test_get_bayeopt_search_space(self, search_space_with_all_types):

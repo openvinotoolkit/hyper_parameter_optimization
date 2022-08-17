@@ -6,14 +6,21 @@ from pyDOE.doe_lhs import lhs as latin_hypercube_sample
 from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
 from hpopt.utils import (
-    _check_mode_input,
-    _check_positive,
-    _check_type,
-    _left_is_better,
+    check_mode_input,
+    check_positive,
+    check_not_negative,
+    left_is_better,
 )
 
 logger = get_logger()
 
+
+def _check_reduction_factor_value(reduction_factor: int):
+    if reduction_factor < 2:
+        raise ValueError(
+            "reduction_factor should be at least 2.\n"
+            f"your value : {reduction_factor}"
+            )
 
 class Trial:
     def __init__(
@@ -24,7 +31,7 @@ class Trial:
         self._id = id
         self._configuration = configuration
         self._rung = 0
-        self.score = []
+        self.score: List[Dict[Union[float, int], Union[float, int]]] = {}
 
     @property
     def id(self):
@@ -40,59 +47,52 @@ class Trial:
 
     @rung.setter
     def rung(self, val: int):
-        _check_type(val, int, "rung")
-        _check_positive(val, "rung")
+        check_not_negative(val, "rung")
         self._rung = val
     
-    def set_iterations(self, iter: int):
-        _check_type(iter, int, "iter")
-        _check_positive(iter, "iter")
+    def set_iterations(self, iter: Union[int, float]):
+        check_positive(iter, "iter")
         self._configuration["iterations"] = iter
 
-    def append_score(self, val: Union[float, int]):
-        _check_type(val, (float, int), "score")
-        self.score.append(val)
+    def register_score(self, score: Union[int, float], resource: Union[int, float]):
+        check_positive(resource)
+        self.score[resource] = score
 
-    def get_best_score(self, mode: str ="max", idx_limit: Optional[int] = None):
-        if idx_limit is not None:
-            score_arr = self.score[:idx_limit]
-        _check_mode_input(mode)
-        if mode == "max":
-            return max(score_arr)
+    def get_best_score(self, mode: str = "max", resource_limit: Optional[Union[float, int]] = None):
+        check_mode_input(mode)
+
+        if resource_limit is None:
+            scores = self.score.values()
         else:
-            return min(score_arr)
+            scores = [val for key, val in self.score.items() if key <= resource_limit]
 
-    def rise_in_rung(self, new_iter: int):
-        self.rung = self.rung + 1
-        self.set_iterations(new_iter)
+        if len(scores) == 0:
+            return None
 
-def _check_reduction_factor_value(reduction_factor: int):
-    if reduction_factor < 2:
-        raise ValueError(
-            "reduction_factor should be at least 2.\n"
-            f"your value : {reduction_factor}"
-            )
+        if mode == "max":
+            return max(scores)
+        else:
+            return min(scores)
+
+    def get_progress(self):
+        if len(self.score) == 0:
+            return 0
+        return max(self.score.keys())
 
 class Rung:
     def __init__(
         self,
-        resource: Union[int, float],
+        resource: int,
         num_required_trial: int,
         reduction_factor: int,
         rung_idx: int,
-        asynchronous_sha: bool = False
     ):
-        _check_type(resource, (int, float))
-        _check_positive(resource, "resource")
-        _check_type(num_required_trial, int, "num_required_trial")
-        _check_positive(num_required_trial, "num_required_trial")
+        check_positive(resource, "resource")
+        check_positive(num_required_trial, "num_required_trial")
         _check_reduction_factor_value(reduction_factor)
-        _check_type(rung_idx, int, "rung_idx")
-        _check_positive(rung_idx, "rung_idx")
-        _check_type(asynchronous_sha, bool, "asynchronous_sha")
+        check_not_negative(rung_idx, "rung_idx")
 
         self._reduction_factor = reduction_factor
-        self._asynchronous_sha = asynchronous_sha
         self._num_required_trial = num_required_trial
         self._resource = resource
         self._trials: List[Trial] = []
@@ -111,18 +111,21 @@ class Rung:
         return self._rung_idx
 
     def add_new_trial(self, trial: Trial):
-        _check_type(trial, Trial, "trial")
+        if not self.need_more_trials():
+            raise RuntimeError(f"{self.rung_idx} rung has already sufficient trials.")
+        trial.set_iterations(self.resource)
+        trial.rung = self.rung_idx
         self._trials.append(trial)
 
-    def get_best_trial(self, mode: str ="max"):
-        _check_mode_input(mode)
+    def get_best_trial(self, mode: str = "max"):
+        check_mode_input(mode)
         best_score = None
         best_trial = None
         for trial in self._trials:
             if trial.rung != self.rung_idx:
                 continue
             trial_score = trial.get_best_score(mode, self.resource)
-            if best_score is None or _left_is_better(trial_score, best_score, mode):
+            if best_score is None or left_is_better(trial_score, best_score, mode):
                 best_trial = trial
                 best_score = trial_score
 
@@ -135,27 +138,30 @@ class Rung:
         if self.need_more_trials():
             return False
         for trial in self._trials:
-            if len(trial.score) < self._resource:
+            if not self.trial_is_done(trial):
                 return False
         return True
 
-    def has_promotable_trial(self):
+    def has_promotable_trial(self, asynchronous_sha: bool = False):
         num_finished_trial = 0
         num_promoted_trial = 0
         for trial in self._trials:
             if trial.rung == self._rung_idx:
-                if len(trial.score) >= self._resource:
+                if self.trial_is_done(trial):
                     num_finished_trial += 1
             else:
                 num_promoted_trial += 1
 
-        if self._asynchronous_sha:
-            return num_finished_trial // self._reduction_factor > num_promoted_trial
+        if asynchronous_sha:
+            return (num_promoted_trial + num_finished_trial) // self._reduction_factor > num_promoted_trial
         else:
             return (
-                self._is_done()
+                self.is_done()
                 and self._num_required_trial // self._reduction_factor > num_promoted_trial
             )
+
+    def trial_is_done(self, trial: Trial):
+        return trial.get_progress() >= self.resource
 
 class Bracket:
     def __init__(
@@ -167,11 +173,9 @@ class Bracket:
         mode: str = "max",
         asynchronous_sha: bool = True
     ):
-        _check_type(minimum_resource, (float, int), "minimum_resource")
-        _check_positive(minimum_resource, "minimum_resource")
+        check_positive(minimum_resource, "minimum_resource")
         _check_reduction_factor_value(reduction_factor)
-        _check_mode_input(mode)
-        _check_type(asynchronous_sha, bool, "asynchronous_sha")
+        check_mode_input(mode)
 
         self._minimum_resource = minimum_resource
         self.maximum_resource = maximum_resource
@@ -180,13 +184,22 @@ class Bracket:
         self._mode = mode
         self._asynchronous_sha = asynchronous_sha
         self._num_trials = len(hyper_parameter_configurations)
+
+        minimum_num_trials = self._reduction_factor ** self.max_rung
+        if minimum_num_trials > self._num_trials:
+            raise ValueError(
+                "number of hyper_parameter_configurations is not enough. "
+                f"minimum number is {minimum_num_trials}, but current number is {self._num_trials}. "
+                "if you want to let them be, you can reduce needed number "
+                "by increasing reduction factor or minimum resource."
+            )
+
         self._rungs: List[Rung] = [
             Rung(
                 minimum_resource * (self._reduction_factor ** idx),
                 math.floor(self._num_trials * (self._reduction_factor ** -idx)),
                 self._reduction_factor,
                 idx,
-                self._asynchronous_sha
             ) for idx in range(self.max_rung + 1)
         ]
         self._trials: Dict[int, Trial] = {}
@@ -197,11 +210,10 @@ class Bracket:
 
     @maximum_resource.setter
     def maximum_resource(self, val: Union[float, int]):
-        _check_type(val, (float, int), "maximum_resource")
-        _check_positive(val, "maximum_resource")
-        if val > self._minimum_resource:
+        check_positive(val, "maximum_resource")
+        if val < self._minimum_resource:
             raise ValueError(
-                "maxnum_resource is greater than minimum_resource.\n"
+                "maxnum_resource should be greater than minimum_resource.\n"
                 f"value to set : {val}, minimum_resource : {self._minimum_resource}"
             )
         elif val == self._minimum_resource: 
@@ -216,9 +228,7 @@ class Bracket:
     @hyper_parameter_configurations.setter
     def hyper_parameter_configurations(self, val: List[Trial]):
         if len(val) == 0:
-            raise ValueError(
-                "hyper_parameter_configurations should have at least one element."
-            )
+            raise ValueError("hyper_parameter_configurations should have at least one element.")
         self._hyper_parameter_configurations = val
 
     @property
@@ -230,39 +240,40 @@ class Bracket:
             )
         )
 
-    def _run_new_trial(self):
+    def _release_new_trial(self):
         if not self.hyper_parameter_configurations:
             return None
 
         new_trial = self.hyper_parameter_configurations.pop(0)
-        new_trial.set_iterations(self._rungs[0].resource)
-
         self._rungs[0].add_new_trial(new_trial)
         self._trials[new_trial.id] = new_trial
 
         return new_trial
 
     def _promote_trial(self, rung_idx: int):
-        if (not self._rungs[rung_idx].has_promotable_trial()
-            or self.max_rung == rung_idx
+        check_not_negative(rung_idx, "rung_idx")
+
+        if (
+            not self._rungs[rung_idx].has_promotable_trial(self._asynchronous_sha)
+            or self.max_rung <= rung_idx
         ):
             return None
+
         best_trial = self._rungs[rung_idx].get_best_trial(self._mode)
-        best_trial.rise_in_rung(self._rungs[rung_idx+1].resource)
+        self._rungs[rung_idx+1].add_new_trial(best_trial)
         return best_trial
 
-    def report_score(self, score: Union[float, int], trial_id: Any):
-        _check_type(score, (float, int),  "score")
-        self._trials[trial_id].append_score(score)
+    def register_score(self, score: Union[float, int], resource: Union[float, int], trial_id: Any):
+        self._trials[trial_id].register_score(score, resource)
 
-    def get_next_sample(self):
+    def get_next_trial(self):
         next_sample = None
         for current_rung in range(self.max_rung-1, -1, -1):
-            if self._rungs[current_rung].has_promotable_trial():
+            if self._rungs[current_rung].has_promotable_trial(self._asynchronous_sha):
                 next_sample = self._promote_trial(current_rung)
                 break
         if next_sample is None:
-            next_sample = self._run_new_trial()
+            next_sample = self._release_new_trial()
 
         return next_sample
 
@@ -296,25 +307,21 @@ class HyperBand(HpoBase):
         num_brackets: Optional[int] = None,
         asynchronous_sha: bool = True,
         asynchronous_bracket: bool = False,
-        **kwargs,
+        **kwargs
     ):
         super(HyperBand, self).__init__(**kwargs)
 
-        _check_type(minimum_resource, (float, int), "minimum_resource")
-        _check_positive(minimum_resource, "minimum_resource")
+        check_positive(minimum_resource, "minimum_resource")
         _check_reduction_factor_value(reduction_factor)
-        _check_type(asynchronous_sha, bool, "asynchronous_sha")
-        _check_type(asynchronous_bracket, bool, "asynchronous_sha")
 
         if num_brackets is not None:
-            _check_type(num_brackets, int, "num_brackets")
-            _check_positive(num_brackets, "num_brackets")
+            check_positive(num_brackets, "num_brackets")
             self._max_bracket = num_brackets - 1
         else:
-            self._max_bracket = math.ceil(
+            self._max_bracket = math.floor(
                 math.log(
-                    self.maximum_resource / self._minimum_resource,
-                    self._reduction_factor
+                    self.maximum_resource / minimum_resource,
+                    reduction_factor
                 )
             )
         self._reduction_factor = reduction_factor
@@ -323,14 +330,14 @@ class HyperBand(HpoBase):
         self._asynchronous_bracket = asynchronous_bracket
         self._brackets: List[Bracket] = []
         # bracket order is the opposite of order of paper's.
-        # this is for running default hyper parmeters with abundnat resource.
+        # this is for running default hyper parmeters with abundant resource.
         for idx in range(self._max_bracket + 1):
             num_bracket_trials = math.ceil(
                 (self._max_bracket + 1)
                 * (self._reduction_factor ** idx)
                 / (idx + 1)
             )
-            configurations = self._get_new_hyper_parameter_configs(num_bracket_trials, idx)
+            configurations = self._make_new_hyper_parameter_configs(num_bracket_trials, str(idx))
             bracket = Bracket(
                 self.maximum_resource * (self._reduction_factor ** -idx),
                 self.maximum_resource,
@@ -341,13 +348,13 @@ class HyperBand(HpoBase):
             )
             self._brackets.append(bracket)
 
-    def _get_new_hyper_parameter_configs(
+    def _make_new_hyper_parameter_configs(
         self,
         num: int,
         trial_id_prefix: Optional[str] = None
     ):
         if trial_id_prefix is not None:
-            trial_id_prefix = "_" + trial_id_prefix
+            trial_id_prefix = trial_id_prefix + "_"
         else:
             trial_id_prefix = ""
 
@@ -355,20 +362,19 @@ class HyperBand(HpoBase):
         configurations = latin_hypercube_sample(len(self.search_space), num)
         for idx, config in enumerate(configurations):
             config_with_key = {key : config[idx] for idx, key in enumerate(self.search_space)}
-            hyper_parameter_configurations.append[
+            hyper_parameter_configurations.append(
                 Trial(
                     trial_id_prefix + str(idx),
                     self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key)
                 )
-            ]
+            )
         return hyper_parameter_configurations
-
 
     def get_next_sample(self):
         next_sample = None
         for bracket in self._brackets:
             if not bracket.is_done():
-                next_sample = bracket.get_next_sample()
+                next_sample = bracket.get_next_trial()
                 if self._asynchronous_bracket and next_sample is None:
                     continue
                 break
@@ -381,9 +387,9 @@ class HyperBand(HpoBase):
     def get_progress(self):
         raise NotImplementedError
 
-    def report(self, score, trial_id: str):
+    def report_score(self, score: Union[float, int], resource: Union[float, int], trial_id: str):
         bracket_idx = trial_id.split('_')[0]
-        self._brackets[int(bracket_idx)].report_score(score, trial_id)
+        self._brackets[int(bracket_idx)].register_score(score, resource, trial_id)
 
     def is_done(self):
         for bracket in self._brackets:

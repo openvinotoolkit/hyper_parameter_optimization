@@ -1,7 +1,7 @@
 from typing import Any, Optional, Union, Tuple
 
 
-def _check_type(
+def check_type(
     value: Any,
     available_type: Union[type, Tuple],
     variable_name: Optional[str] = None,
@@ -23,7 +23,7 @@ def _check_type(
             raise TypeError
         raise TypeError(message)
 
-def _check_positive(
+def check_positive(
     value: Any,
     variable_name: Optional[str] = None,
     error_message: Optional[str] = None
@@ -40,15 +40,32 @@ def _check_positive(
             raise ValueError
         raise ValueError(message)
 
-def _check_mode_input(mode):
+def check_not_negative(
+    value: Any,
+    variable_name: Optional[str] = None,
+    error_message: Optional[str] = None
+):
+    if value < 0:
+        if error_message is not None:
+            message = error_message
+        elif variable_name:
+            message = (
+                f"{variable_name} should be positive.\n"
+                f"your value : {value}"
+            )
+        else:
+            raise ValueError
+        raise ValueError(message)
+
+def check_mode_input(mode):
     if mode not in ["max", "min"]:
         raise ValueError(
             "mode should be max on min.\n"
             f"Your value : {mode}"
         )
 
-def _left_is_better(val1, val2, mode):
-    _check_mode_input(mode)
+def left_is_better(val1, val2, mode):
+    check_mode_input(mode)
     if mode == "max":
         return val1 > val2
     else:

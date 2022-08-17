@@ -2,7 +2,7 @@ import math
 from typing import Any, Dict, List, Optional, Union, Tuple
 
 from hpopt.logger import get_logger
-from hpopt.utils import _check_type, _check_positive
+from hpopt.utils import check_positive
 
 logger = get_logger()
 
@@ -111,7 +111,6 @@ class SingleSearchSpace:
             )
 
         if self.is_categorical():
-            _check_type(self._choice_list, (list, tuple), "choice_list")
             if len(self._choice_list) <= 1:
                 raise ValueError("If type is choice, choice_list should have more than one element")
             if self._min != 0:
@@ -126,9 +125,6 @@ class SingleSearchSpace:
             if max is None:
                 raise ValueError("If type isn't choice, you should set max value of search space.")
 
-            _check_type(self._min, (int, float), "min")
-            _check_type(self._max, (int, float), "max")
-
             if self._min >= self._max:
                 raise ValueError(
                     "max value should be greater than min value.\n"
@@ -136,7 +132,6 @@ class SingleSearchSpace:
                 )
 
             if self.use_log_scale():
-                _check_type(self._log_base, int, "log_base")
                 if self._log_base <= 1:
                     raise ValueError(
                         "log base should be greater than 1.\n"
@@ -152,8 +147,7 @@ class SingleSearchSpace:
                     raise ValueError(
                         f"The {self._type} type requires step value. But it doesn't exists"
                     )
-                _check_type(self._step, (float, int), "step")
-                _check_positive(self._step, "step")
+                check_positive(self._step, "step")
                 if self._step > self._max - self._min:
                     raise ValueError(
                         "Difference between min and max is greater than step.\n"
@@ -191,7 +185,6 @@ class SingleSearchSpace:
         return self._max
 
     def space_to_real(self, number: Union[int, float]):
-        _check_type(number, (int, float), "number")
         if self.is_categorical():
             idx = max(min(int(number), len(self._choice_list) - 1), 0)
             return self._choice_list[idx]
@@ -204,7 +197,6 @@ class SingleSearchSpace:
             return number
 
     def real_to_space(self, number: Union[int, float]):
-        _check_type(number, (int, float), "number")
         if self.use_log_scale():
             return math.log(number, self._log_base)
         return number
@@ -253,9 +245,7 @@ class SearchSpace:
     ):
         self.search_space: Dict[str, SingleSearchSpace] = {}
 
-        _check_type(search_space, dict, "search_space")
         for key, val in search_space.items():
-            _check_type(val, dict, error_message="Each value of search space should be dict.")
             if "range" not in val:
                 val["type"] = val.pop("param_type")
                 self.search_space[key] = SingleSearchSpace(**val)
@@ -264,7 +254,6 @@ class SearchSpace:
                 if val["param_type"] == "choice":
                     args["choice_list"] = val["range"]
                 else:
-                    _check_type(val["range"], list, "range")
                     if len(val) != 2:
                         logger.warning("If there is the range in keys, then other values are ignored.")
                     try:

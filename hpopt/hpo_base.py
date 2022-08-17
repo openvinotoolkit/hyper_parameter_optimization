@@ -12,7 +12,7 @@ from typing import List, Optional, Union, Dict, Any, Union
 import hpopt
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
-from hpopt.utils import _check_type, _check_mode_input, _check_positive
+from hpopt.utils import check_type, check_mode_input, check_positive
 
 logger = get_logger()
 
@@ -76,29 +76,21 @@ class HpoBase(ABC):
         resume: bool = False,
         prior_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
     ):
-        _check_mode_input(mode)
-        _check_type(expected_time_ratio, (float, int), "expected_time_ratio")
-        _check_positive(expected_time_ratio, "expected_time_ratio")
-        _check_type(full_dataset_size, int, "full_dataset_size")
-        _check_positive(full_dataset_size, "full_dataset_size")
-        _check_type(num_full_iterations, int, "num_full_iterations")
-        _check_positive(num_full_iterations, "num_full_iterations")
-        _check_type(non_pure_train_ratio, "non_pure_train_ratio", float)
+        check_mode_input(mode)
+        check_positive(expected_time_ratio, "expected_time_ratio")
+        check_positive(full_dataset_size, "full_dataset_size")
+        check_positive(num_full_iterations, "num_full_iterations")
         if not (0 < non_pure_train_ratio < 1):
             raise ValueError(
                 "non_pure_train_ratio should be between 0 and 1."
                 f" Your value is {non_pure_train_ratio}"
             )
         if maximum_resource is not None:
-            _check_type(maximum_resource, (float, int), "maximum_resource")
-            _check_positive(maximum_resource, "maximum_resource")
+            check_positive(maximum_resource, "maximum_resource")
         if num_trials is not None:
-            _check_type(num_trials, int, "num_trials")
-            _check_positive(num_trials, "num_trials")
-        _check_type(num_workers, int)
-        _check_positive(num_workers, "num_workers")
+            check_positive(num_trials, "num_trials")
+        check_positive(num_workers, "num_workers")
         if subset_ratio is not None:
-            _check_type(subset_ratio, (float, int), "subset_ratio")
             if not (0 < subset_ratio <= 1.0):
                 raise ValueError(
                     "subset_ratio should be greater than 0 and lesser than or equal to 1."
@@ -247,5 +239,5 @@ class HpoBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def report(self, score, trial_id):
+    def report_score(self, score, resource, trial_id):
         raise NotImplementedError
