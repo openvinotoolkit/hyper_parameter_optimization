@@ -70,3 +70,6 @@ def left_is_better(val1, val2, mode):
         return val1 > val2
     else:
         return val1 < val2
+
+def dummy_obj(**kwargs):
+    return 0

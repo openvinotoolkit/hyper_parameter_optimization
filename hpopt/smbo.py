@@ -12,7 +12,7 @@ from bayes_opt import BayesianOptimization, UtilityFunction
 import hpopt
 from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
-from hpopt.utils import check_type
+from hpopt.utils import check_type, dummy_obj
 
 logger = get_logger()
 
@@ -86,7 +86,7 @@ class Smbo(HpoBase):
             )
 
         self.optimizer = BayesianOptimization(
-            f=self.obj,
+            f=dummy_obj,
             pbounds=self.bayesopt_space,
             verbose=self.verbose,
             random_state=None,

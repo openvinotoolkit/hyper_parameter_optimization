@@ -12,6 +12,7 @@ from bayes_opt import BayesianOptimization, UtilityFunction
 import hpopt
 from hpopt.hpo_base import HpoBase
 from hpopt.logger import get_logger
+from hpopt.utils import dummy_obj
 
 logger = get_logger()
 
@@ -147,7 +148,7 @@ class AsyncHyperBand(HpoBase):
         self.bayesopt_space = self.search_space.get_bayeopt_search_space()
 
         self.optimizer = BayesianOptimization(
-            f=self.obj,
+            f=dummy_obj,
             pbounds=self.bayesopt_space,
             verbose=self.verbose,
             random_state=None,

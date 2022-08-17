@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from pyDOE.doe_lhs import lhs as latin_hypercube_sample
 
-from hpopt.hpo_base import HpoBase
+from hpopt.hpo_base import HpoBase, Trial
 from hpopt.logger import get_logger
 from hpopt.utils import (
     check_mode_input,
@@ -22,24 +22,14 @@ def _check_reduction_factor_value(reduction_factor: int):
             f"your value : {reduction_factor}"
             )
 
-class Trial:
+class AshaTrial(Trial):
     def __init__(
         self,
         id: Any,
         configuration: Dict
     ):
-        self._id = id
-        self._configuration = configuration
+        super().__init__(id, configuration)
         self._rung = 0
-        self.score: List[Dict[Union[float, int], Union[float, int]]] = {}
-
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def configuration(self):
-        return self._configuration
 
     @property
     def rung(self):
@@ -49,35 +39,6 @@ class Trial:
     def rung(self, val: int):
         check_not_negative(val, "rung")
         self._rung = val
-    
-    def set_iterations(self, iter: Union[int, float]):
-        check_positive(iter, "iter")
-        self._configuration["iterations"] = iter
-
-    def register_score(self, score: Union[int, float], resource: Union[int, float]):
-        check_positive(resource)
-        self.score[resource] = score
-
-    def get_best_score(self, mode: str = "max", resource_limit: Optional[Union[float, int]] = None):
-        check_mode_input(mode)
-
-        if resource_limit is None:
-            scores = self.score.values()
-        else:
-            scores = [val for key, val in self.score.items() if key <= resource_limit]
-
-        if len(scores) == 0:
-            return None
-
-        if mode == "max":
-            return max(scores)
-        else:
-            return min(scores)
-
-    def get_progress(self):
-        if len(self.score) == 0:
-            return 0
-        return max(self.score.keys())
 
 class Rung:
     def __init__(
@@ -95,7 +56,7 @@ class Rung:
         self._reduction_factor = reduction_factor
         self._num_required_trial = num_required_trial
         self._resource = resource
-        self._trials: List[Trial] = []
+        self._trials: List[AshaTrial] = []
         self._rung_idx = rung_idx
 
     @property
@@ -110,7 +71,7 @@ class Rung:
     def rung_idx(self):
         return self._rung_idx
 
-    def add_new_trial(self, trial: Trial):
+    def add_new_trial(self, trial: AshaTrial):
         if not self.need_more_trials():
             raise RuntimeError(f"{self.rung_idx} rung has already sufficient trials.")
         trial.set_iterations(self.resource)
@@ -160,7 +121,7 @@ class Rung:
                 and self._num_required_trial // self._reduction_factor > num_promoted_trial
             )
 
-    def trial_is_done(self, trial: Trial):
+    def trial_is_done(self, trial: AshaTrial):
         return trial.get_progress() >= self.resource
 
 class Bracket:
@@ -168,7 +129,7 @@ class Bracket:
         self,
         minimum_resource: Union[float, int],
         maximum_resource: Union[float, int],
-        hyper_parameter_configurations: List[Trial],
+        hyper_parameter_configurations: List[AshaTrial],
         reduction_factor: int = 3,
         mode: str = "max",
         asynchronous_sha: bool = True
@@ -202,7 +163,7 @@ class Bracket:
                 idx,
             ) for idx in range(self.max_rung + 1)
         ]
-        self._trials: Dict[int, Trial] = {}
+        self._trials: Dict[int, AshaTrial] = {}
 
     @property
     def maximum_resource(self):
@@ -226,7 +187,7 @@ class Bracket:
         return self._hyper_parameter_configurations
     
     @hyper_parameter_configurations.setter
-    def hyper_parameter_configurations(self, val: List[Trial]):
+    def hyper_parameter_configurations(self, val: List[AshaTrial]):
         if len(val) == 0:
             raise ValueError("hyper_parameter_configurations should have at least one element.")
         self._hyper_parameter_configurations = val
@@ -288,6 +249,7 @@ class HyperBand(HpoBase):
     [1] "Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization", JMLR 2018
         https://arxiv.org/abs/1603.06560
         https://homes.cs.washington.edu/~jamieson/hyperband.html
+
     [2] "A System for Massively Parallel Hyperparameter Tuning", MLSys 2020
         https://arxiv.org/abs/1810.05934
 
@@ -363,7 +325,7 @@ class HyperBand(HpoBase):
         for idx, config in enumerate(configurations):
             config_with_key = {key : config[idx] for idx, key in enumerate(self.search_space)}
             hyper_parameter_configurations.append(
-                Trial(
+                AshaTrial(
                     trial_id_prefix + str(idx),
                     self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key)
                 )

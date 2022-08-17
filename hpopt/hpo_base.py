@@ -12,7 +12,7 @@ from typing import List, Optional, Union, Dict, Any, Union
 import hpopt
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
-from hpopt.utils import check_type, check_mode_input, check_positive
+from hpopt.utils import check_mode_input, check_positive, check_not_negative
 
 logger = get_logger()
 
@@ -39,8 +39,6 @@ class HpoBase(ABC):
                                             HPO use time about exepected_time_ratio *
                                             train time after HPO times.
         max_iterations (int): Max training epoch for each trial.
-        max_time: TBD
-        resources_per_trial: TBD
         subset_ratio (float or int): ratio to how many train dataset to use for each trial.
                                      The lower value is, the faster the speed is.
                                      But If it's too low, HPO can be unstable.
@@ -66,12 +64,10 @@ class HpoBase(ABC):
         metric: str = "mAP",
         expected_time_ratio: Union[int, float] = 4,
         maximum_resource: Optional[Union[int, float]] = None,
-        max_time=None,
-        resources_per_trial=None,
         subset_ratio: Optional[Union[float, int]] = None,
         min_subset_size=500,
         image_resize: List[int] = [0, 0],
-        batch_size_name=None,
+        batch_size_name: Optional[str] = None,
         verbose: int = 0,
         resume: bool = False,
         prior_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
@@ -80,7 +76,7 @@ class HpoBase(ABC):
         check_positive(expected_time_ratio, "expected_time_ratio")
         check_positive(full_dataset_size, "full_dataset_size")
         check_positive(num_full_iterations, "num_full_iterations")
-        if not (0 < non_pure_train_ratio < 1):
+        if not (0 < non_pure_train_ratio <= 1):
             raise ValueError(
                 "non_pure_train_ratio should be between 0 and 1."
                 f" Your value is {non_pure_train_ratio}"
@@ -96,8 +92,6 @@ class HpoBase(ABC):
                     "subset_ratio should be greater than 0 and lesser than or equal to 1."
                     f" Your value is {subset_ratio}"
                 )
-        if not hasattr(image_resize, "__getitem__"):
-            raise TypeError("image_resize should be able to accessible by index.")
         elif len(image_resize) < 2:
             raise ValueError("image_resize should have at least two values.")
         elif image_resize[0] < 0 or image_resize[1] < 0:
@@ -113,8 +107,6 @@ class HpoBase(ABC):
         self.full_dataset_size = full_dataset_size
         self.expected_time_ratio = expected_time_ratio
         self.maximum_resource = maximum_resource
-        self.max_time = max_time
-        self.resources_per_trial = resources_per_trial
         self.subset_ratio = subset_ratio
         self.min_subset_size = min_subset_size
         self.image_resize = image_resize
@@ -133,9 +125,6 @@ class HpoBase(ABC):
             json.dump(self.hpo_status, json_file, indent=4)
             json_file.close()
         os.umask(oldmask)
-
-    def obj(self, **kwargs):
-        return 0
 
     def print_results(self):
         field_widths = []
@@ -241,3 +230,60 @@ class HpoBase(ABC):
     @abstractmethod
     def report_score(self, score, resource, trial_id):
         raise NotImplementedError
+
+class Trial:
+    def __init__(
+        self,
+        id: Any,
+        configuration: Dict
+    ):
+        self._id = id
+        self._configuration = configuration
+        self._rung = 0
+        self.score: Dict[Union[float, int], Union[float, int]] = {}
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def configuration(self):
+        return self._configuration
+
+    @property
+    def rung(self):
+        return self._rung
+
+    @rung.setter
+    def rung(self, val: int):
+        check_not_negative(val, "rung")
+        self._rung = val
+    
+    def set_iterations(self, iter: Union[int, float]):
+        check_positive(iter, "iter")
+        self._configuration["iterations"] = iter
+
+    def register_score(self, score: Union[int, float], resource: Union[int, float]):
+        check_positive(resource)
+        self.score[resource] = score
+
+    def get_best_score(self, mode: str = "max", resource_limit: Optional[Union[float, int]] = None):
+        check_mode_input(mode)
+
+        if resource_limit is None:
+            scores = self.score.values()
+        else:
+            scores = [val for key, val in self.score.items() if key <= resource_limit]
+
+        if len(scores) == 0:
+            return None
+
+        if mode == "max":
+            return max(scores)
+        else:
+            return min(scores)
+
+    def get_progress(self):
+        if len(self.score) == 0:
+            return 0
+        return max(self.score.keys())
