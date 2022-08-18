@@ -5,8 +5,8 @@
 import math
 
 import pytest
-from hpopt import asha
-from hpopt.asha import Trial, Rung, Bracket, HyperBand
+from hpopt import hyperband
+from hpopt.hyperband import Trial, Rung, Bracket, HyperBand
 
 @pytest.fixture
 def good_trial_args():
@@ -85,12 +85,12 @@ def hyper_band(good_hyperband_args):
 
 @pytest.mark.parametrize("reduction_factor", [4, 100, 4000])
 def test_check_reduction_factor_value(reduction_factor):
-    asha._check_reduction_factor_value(reduction_factor)
+    hyperband._check_reduction_factor_value(reduction_factor)
 
 @pytest.mark.parametrize("reduction_factor", [-10, 1])
 def test_check_reduction_factor_lesser_value(reduction_factor):
     with pytest.raises(ValueError):
-        asha._check_reduction_factor_value(reduction_factor)
+        hyperband._check_reduction_factor_value(reduction_factor)
 
 class TestAshaTrial:
     @pytest.mark.parametrize("rung_val", [0, 10])

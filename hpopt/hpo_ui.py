@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 
 import hpopt
-from hpopt.hyperband import AsyncHyperBand
+from hpopt.hyperband import HyperBand
 from hpopt.logger import get_logger
 from hpopt.smbo import Smbo
 
@@ -126,7 +126,7 @@ def create(
             default_hyper_parameters=default_hyper_parameters,
         )
     elif search_alg == "asha":
-        return AsyncHyperBand(
+        return HyperBand(
             save_path=save_path,
             search_space=search_space,
             mode=mode,
