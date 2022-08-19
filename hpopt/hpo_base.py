@@ -3,12 +3,11 @@
 #
 
 import math
-import time
 import os
 import json
-import subprocess
 import pickle
 import inspect
+import multiprocessing
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union, Dict, Any, Union
 from os import path as osp
@@ -16,7 +15,8 @@ from os import path as osp
 import hpopt
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
-from hpopt.utils import check_mode_input, check_positive, check_not_negative
+from hpopt.utils import check_mode_input, check_positive
+from hpopt.hpo_runner import run_hpo_loop
 
 logger = get_logger()
 
@@ -170,35 +170,21 @@ class HpoBase(ABC):
         return False
 
     def run_hpo(self, train_func):
-        command = self._get_hpo_runner_command(train_func)
-        hpo_loop_process = subprocess.Popen(
-            args=command,
-            shell=False,
-            env=os.environ.copy(),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE
-        )
-        pickle.dump(self, hpo_loop_process.stdin) # pass hpo alrgorim(self) to subprocess
-        hpo_loop_process.wait()
-        best_hp = pickle.load(hpo_loop_process.stdout)
-
-        return best_hp
-
-    def _get_hpo_runner_command(self, train_func):
-        module = inspect.getmodule(train_func)
-        module_name = module.__name__
-
-        command = ["python3", "-m", "hpopt.hpo_runner"]
-        if module_name == "__main__":
-            file_path = osp.abspath(module.__file__)
-            module_name = osp.basename(file_path).split('.')[0]
-            command.extend(
-                ["--module-name", module_name, "--file-path", file_path, "--train-function-name", train_func.__name__]
+        mp = multiprocessing.get_context("spawn")
+        parent_conn, child_conn = mp.Pipe()
+        p = mp.Process(
+            target=run_hpo_loop,
+            args=(
+                self,
+                train_func,
+                child_conn
             )
-        else:
-            command.extend(["--module-name", module_name, "--train-function-name", train_func.__name__])
+        )
+        p.start()
+        p.join()
+        best_config = child_conn.recv()
 
-        return command
+        return best_config
 
     @abstractmethod
     def is_done(self):
