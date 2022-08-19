@@ -6,8 +6,12 @@ import math
 import time
 import os
 import json
+import subprocess
+import pickle
+import inspect
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union, Dict, Any, Union
+from os import path as osp
 
 import hpopt
 from hpopt.logger import get_logger
@@ -165,55 +169,40 @@ class HpoBase(ABC):
 
         return False
 
-    def get_best_config(self):
-        self.update_scores()
+    def run_hpo(self, train_func):
+        command = self._get_hpo_runner_command(train_func)
+        hpo_loop_process = subprocess.Popen(
+            args=command,
+            shell=False,
+            env=os.environ.copy(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE
+        )
+        pickle.dump(self, hpo_loop_process.stdin) # pass hpo alrgorim(self) to subprocess
+        hpo_loop_process.wait()
+        best_hp = pickle.load(hpo_loop_process.stdout)
 
-        # Wait for updating files up to 5 seconds.
-        update_try_count = 0
+        return best_hp
 
-        while update_try_count < 5:
-            update_try_count += 1
-            update_flag = False
+    def _get_hpo_runner_command(self, train_func):
+        module = inspect.getmodule(train_func)
+        module_name = module.__name__
 
-            for config_item in self.hpo_status["config_list"]:
-                if config_item["score"] is None:
-                    time.sleep(1)
-                    self.update_scores()
-                    update_flag = True
-                    break
+        command = ["python3", "-m", "hpopt.hpo_runner"]
+        if module_name == "__main__":
+            file_path = osp.abspath(module.__file__)
+            module_name = osp.basename(file_path).split('.')[0]
+            command.extend(
+                ["--module-name", module_name, "--file-path", file_path, "--train-function-name", train_func.__name__]
+            )
+        else:
+            command.extend(["--module-name", module_name, "--train-function-name", train_func.__name__])
 
-            if not update_flag:
-                break
+        return command
 
-        # Fining the 1st non-null score
-        best_score = 0
-        best_trial_id = 0
-
-        for trial_id, config_item in enumerate(self.hpo_status["config_list"]):
-            if config_item["score"] is not None:
-                best_score = config_item["score"]
-                best_trial_id = trial_id
-                break
-
-        for trial_id, config_item in enumerate(self.hpo_status["config_list"]):
-            update_flag = False
-
-            if config_item["score"] is None:
-                continue
-
-            if self.mode == "min" and config_item["score"] < best_score:
-                update_flag = True
-            elif self.mode == "max" and config_item["score"] > best_score:
-                update_flag = True
-
-            if update_flag:
-                best_score = config_item["score"]
-                best_trial_id = trial_id
-
-        self.hpo_status["best_config_id"] = best_trial_id
-        self.save_results()
-
-        return self.hpo_status["config_list"][best_trial_id]["config"]
+    @abstractmethod
+    def is_done(self):
+        raise NotImplementedError
 
     @abstractmethod
     def get_next_sample(self):
@@ -231,6 +220,10 @@ class HpoBase(ABC):
     def report_score(self, score, resource, trial_id):
         raise NotImplementedError
 
+    @abstractmethod
+    def get_best_config(self):
+        raise NotImplementedError
+
 class Trial:
     def __init__(
         self,
@@ -239,7 +232,6 @@ class Trial:
     ):
         self._id = id
         self._configuration = configuration
-        self._rung = 0
         self.score: Dict[Union[float, int], Union[float, int]] = {}
 
     @property
@@ -250,15 +242,6 @@ class Trial:
     def configuration(self):
         return self._configuration
 
-    @property
-    def rung(self):
-        return self._rung
-
-    @rung.setter
-    def rung(self, val: int):
-        check_not_negative(val, "rung")
-        self._rung = val
-    
     def set_iterations(self, iter: Union[int, float]):
         check_positive(iter, "iter")
         self._configuration["iterations"] = iter

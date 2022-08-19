@@ -1,4 +1,5 @@
 import math
+from turtle import screensize
 from typing import Any, Dict, List, Optional, Union
 
 from pyDOE.doe_lhs import lhs as latin_hypercube_sample
@@ -241,6 +242,18 @@ class Bracket:
     def is_done(self):
         return self._rungs[-1].is_done()
 
+    def get_best_trial(self):
+        if not self.is_done():
+            logger.warning("Bracket is not done yet.")
+
+        trial = None
+        for rung in reversed(self._rungs):
+            if rung.is_done():
+                trial = rung.get_best_trial(self._mode)
+                break
+
+        return trial
+
 class HyperBand(HpoBase):
     """
     This implements the Asyncronous HyperBand scheduler with iterations only.
@@ -358,3 +371,16 @@ class HyperBand(HpoBase):
             if not bracket.is_done():
                 return False
         return True
+
+    def get_best_config(self):
+        best_score = None
+        best_trial = None
+
+        for bracket in self._brackets:
+            trial = bracket.get_best_trial()
+            score = trial.get_best_score()
+            if best_score is None or left_is_better(score, best_score, self.mode):
+                best_score = score
+                best_trial = trial
+
+        return best_trial.configuration

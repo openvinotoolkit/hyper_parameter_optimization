@@ -374,6 +374,9 @@ class TestBracket:
         with pytest.raises(ValueError):
             bracket = Bracket(**wrong_bracket_args)
 
+    def test_get_best_trial(self):
+        pass
+
 class TestHyperBand:
     def test_init(self, good_hyperband_args):
         hb = HyperBand(**good_hyperband_args)
@@ -453,3 +456,6 @@ class TestHyperBand:
                 )
 
         assert hyper_band.is_done() == True
+
+    def test_get_best_config(self):
+        assert False
