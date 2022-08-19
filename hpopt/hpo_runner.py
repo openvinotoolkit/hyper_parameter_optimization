@@ -1,17 +1,11 @@
-import importlib
-import importlib.util
 import os
-import pickle
-import sys
 from functools import partial
 from multiprocessing import Process, Queue
-from typing import Any, Dict, Union, Optional, Callable
-
-from hpopt.hpo_base import HpoBase, Trial
+from typing import Any, Dict, Union
 
 
 class HpoLoop:
-    def __init__(self, hpo_algo: HpoBase, train_func: Callable[[Dict, Callable]]):
+    def __init__(self, hpo_algo, train_func):
         self._hpo_algo = hpo_algo
         self._train_func = train_func
         self._processes: Dict[int, Process] = {}
@@ -31,7 +25,7 @@ class HpoLoop:
 
         return self._hpo_algo.get_best_config()
 
-    def _start_trial_process(self, trial: Trial):
+    def _start_trial_process(self, trial):
         process = Process(
             target=_run_hpo_trial,
             args=(
@@ -72,7 +66,7 @@ def _run_hpo_trial(
     hp_config: Dict[str, Any],
     report_queue: Queue,
     trial_id: Any,
-    train_func: Callable[[Dict, Callable]]
+    train_func
 ):
     train_func(
         hp_config,
@@ -94,7 +88,8 @@ def _report_score(
         }
     )
 
-def run_hpo_loop(hpo_algo: HpoBase, train_func: Callable[[Dict, Callable]], icp_pipe):
+def run_hpo_loop(hpo_algo, train_func, ipc_pipe):
     hpo_loop = HpoLoop(hpo_algo, train_func)
-    best_config = hpo_loop.run()
-    icp_pipe.send(best_config)
+    best_trial = hpo_loop.run()
+    ipc_pipe.send(best_trial.configuration)
+    ipc_pipe.close()

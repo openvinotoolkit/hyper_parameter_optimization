@@ -2,21 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-import math
-import os
 import json
-import pickle
-import inspect
+import math
 import multiprocessing
+import os
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union, Dict, Any, Union
 from os import path as osp
+from typing import Any, Dict, List, Optional, Union
 
 import hpopt
+from hpopt.hpo_runner import run_hpo_loop
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
 from hpopt.utils import check_mode_input, check_positive
-from hpopt.hpo_runner import run_hpo_loop
 
 logger = get_logger()
 
@@ -181,8 +179,8 @@ class HpoBase(ABC):
             )
         )
         p.start()
+        best_config = parent_conn.recv()
         p.join()
-        best_config = child_conn.recv()
 
         return best_config
 
