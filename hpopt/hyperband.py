@@ -378,9 +378,14 @@ class HyperBand(HpoBase):
 
         for bracket in self._brackets:
             trial = bracket.get_best_trial()
+            if trial is None:
+                continue
+
             score = trial.get_best_score()
             if best_score is None or left_is_better(score, best_score, self.mode):
                 best_score = score
                 best_trial = trial
 
+        if best_trial is None:
+            return None
         return best_trial.configuration
