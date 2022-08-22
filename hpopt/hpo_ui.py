@@ -4,7 +4,6 @@
 
 import glob
 import json
-import math
 import os
 import time
 from enum import IntEnum
@@ -12,122 +11,19 @@ from statistics import median
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-import torch
-from torch.utils.data import random_split
-from torchvision import transforms
 
 import hpopt
-from hpopt.dummy import DummyOpt
-from hpopt.hyperband import AsyncHyperBand
+from hpopt.hyperband import HyperBand
 from hpopt.logger import get_logger
-from hpopt.smbo import BayesOpt
+from hpopt.smbo import Smbo
 
 logger = get_logger()
-
-
-class SearchSpace:
-    """
-    This implements search space used for SMBO and ASHA.
-    This class support uniform and quantized uniform with normal and log scale
-    in addition to categorical type. Quantized type has step which is unit for change.
-
-    Args:
-        type (str): type of hyper parameter in search space.
-                    supported types: uniform, loguniform, quniform, qloguniform, choice
-        range (list): range of hyper parameter search space.
-                      What value at each position means is as bellow.
-                      uniform: [lower space, upper space]
-                      quniform: [lower space, upper space, step]
-                      loguniform: [lower space, upper space, logarithm base]
-                      qloguniform: [lower space, upper space, step, logarithm base]
-                      categorical: [each categorical values, ...]
-    """
-
-    def __init__(self, type: str, range: List[Union[float, int]]):
-        self.type = type
-        self.range = range
-
-        if self.type == "uniform" or self.type == "loguniform":
-            if len(self.range) == 2:
-                range.append(2)
-            elif len(self.range) < 2:
-                raise ValueError(
-                    f"The range of the {self.type} type requires "
-                    "two numbers for lower and upper limits. "
-                    f"Your value is {self.range}"
-                )
-        elif self.type == "quniform" or self.type == "qloguniform":
-            if len(self.range) == 3:
-                range.append(2)
-            elif len(self.range) < 3:
-                raise ValueError(
-                    f"The range of the {self.type} type requires "
-                    "three numbers for lower/upper limits and "
-                    "quantization number. "
-                    f"Your value is {self.range}"
-                )
-        elif self.type == "choice":
-            self.range = [0, len(range)]
-            self.choice_list = range
-        else:
-            raise TypeError(f"{self.type} is an unknown search space type.")
-
-    def __repr__(self):
-        return f"type: {self.type}, range: {self.range}"
-
-    def lower_space(self):
-        if self.type == "loguniform":
-            return math.log(self.range[0], self.range[2])
-        elif self.type == "qloguniform":
-            return math.log(self.range[0], self.range[3])
-
-        return self.range[0]
-
-    def upper_space(self):
-        if self.type == "loguniform":
-            return math.log(self.range[1], self.range[2])
-        elif self.type == "qloguniform":
-            return math.log(self.range[1], self.range[3])
-
-        return self.range[1]
-
-    def space_to_real(self, number: Union[int, float]):
-        if self.type == "quniform":
-            return round(number / self.range[2]) * self.range[2]
-        elif self.type == "loguniform":
-            return self.range[2] ** number
-        elif self.type == "qloguniform":
-            return round(self.range[3] ** number / self.range[2]) * self.range[2]
-        elif self.type == "choice":
-            idx = int(number)
-            idx = min(idx, len(self.choice_list) - 1)
-            idx = max(idx, 0)
-            return self.choice_list[idx]
-
-        return number
-
-    def real_to_space(self, number: Union[int, float]):
-        if self.type == "loguniform":
-            return math.log(number, self.range[2])
-        elif self.type == "qloguniform":
-            return math.log(number, self.range[3])
-
-        return number
-
-
-def createDummyOpt(
-    search_alg=None, save_path=None, search_space=None, resume=False, **kwargs
-):
-    if save_path is None:
-        return None
-
-    return DummyOpt(save_path=save_path, search_space=search_space, resume=resume)
 
 
 def create(
     full_dataset_size: int,
     num_full_iterations: int,
-    search_space: List[SearchSpace],
+    search_space: Dict[str, Dict[str, Any]],
     save_path: str = "hpo",
     search_alg: str = "bayes_opt",
     early_stop: Optional[bool] = None,
@@ -206,7 +102,7 @@ def create(
         clear_trial_files(save_path)
 
     if search_alg == "bayes_opt":
-        return BayesOpt(
+        return Smbo(
             save_path=save_path,
             search_space=search_space,
             early_stop=early_stop,
@@ -230,7 +126,7 @@ def create(
             default_hyper_parameters=default_hyper_parameters,
         )
     elif search_alg == "asha":
-        return AsyncHyperBand(
+        return HyperBand(
             save_path=save_path,
             search_space=search_space,
             mode=mode,
@@ -776,90 +672,3 @@ class Status(IntEnum):
     NORESULT = 4
     PARTIALRESULT = 5
     COMPLETERESULT = 6
-
-
-class HpoDataset:
-    """
-    Dataset class which wrap dataset class used in training for sub-sampling.
-
-    Args:
-        fullset: dataset instance used in train.
-        config (dict): HPO configuration for a trial.
-                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
-                       and tiral information.
-    """
-
-    def __init__(self, fullset, config: Dict[str, Any]):
-        self.__dict__ = fullset.__dict__.copy()
-        self.fullset = fullset
-
-        if config["subset_ratio"] > 0.0:
-            if config["subset_ratio"] < 1.0:
-                subset_size = int(len(fullset) * config["subset_ratio"])
-                self.subset, _ = random_split(
-                    fullset,
-                    [subset_size, (len(fullset) - subset_size)],
-                    generator=torch.Generator().manual_seed(42),
-                )
-
-                # check if fullset is an inheritance of mmdet.datasets
-                if hasattr(self, "flag"):
-                    self._update_group_flag()
-            else:
-                self.subset = fullset
-            self.length = len(self.subset)
-        else:
-            self.subset = fullset
-            self.length = len(fullset)
-
-        if config["resize_height"] > 0 and config["resize_width"] > 0:
-            self.transform = transforms.Resize(
-                (config["resize_height"], config["resize_width"]), interpolation=2
-            )
-        else:
-            self.transform = None
-
-    def _update_group_flag(self):
-        self.flag = np.zeros(len(self.subset), dtype=np.uint8)
-
-        update_flag = False
-        if "img_metas" in self.subset[0]:
-            if "ori_shape" in self.subset[0]["img_metas"].data:
-                update_flag = True
-
-        if not update_flag:
-            return
-
-        for i in range(len(self.subset)):
-            self.flag[i] = self.fullset.flag[self.subset.indices[i]]
-
-    def __getitem__(self, index: int):
-        data = self.subset[index]
-        if self.transform:
-            if type(data) is tuple and len(data) == 2 and type(data[0]) == torch.Tensor:
-                data = (self.transform(data[0]), data[1])
-            elif type(data) is dict and "img" in data:
-                data["img"] = self.transform(data["img"])
-        return data
-
-    def __len__(self):
-        return self.length
-
-    def __getattr__(self, item: str):
-        if isinstance(item, str) and (item == "__setstate__" or item == "__getstate__"):
-            raise AttributeError(item)
-
-        return getattr(self.fullset, item)
-
-
-def createHpoDataset(fullset, config: Dict[str, Any]):
-    """
-    wrap original dataset by HpoDataset using hpo_config returend by Hpopt.
-
-    Args:
-        fullset: dataset instance used in train.
-        config (dict): HPO configuration for a trial.
-                       This include train confiuration(e.g. hyper parameter, epoch, etc.)
-                       and tiral information.
-    """
-    return HpoDataset(fullset, config)
