@@ -160,6 +160,18 @@ class TestRung:
         else:
             assert  best_trial.get_best_score(mode) == 0
 
+    def test_get_best_trial_with_not_started_trial(self, rung, good_trial_args):
+        for score in range(rung.num_required_trial-1):
+            trial = AshaTrial(**good_trial_args)
+            trial.register_score(score=score, resource=1)
+            rung.add_new_trial(trial)
+
+        trial = AshaTrial(**good_trial_args)
+        rung.add_new_trial(trial)
+        best_trial = rung.get_best_trial()
+
+        assert  best_trial.get_best_score() == rung.num_required_trial - 2
+
     def test_get_best_trial_with_no_trial(self, rung):
         best_trial = rung.get_best_trial()
         assert best_trial == None
@@ -191,30 +203,31 @@ class TestRung:
         trial.register_score(100, rung.resource+1)
         assert rung.is_done() == True
 
-    def test_has_promotable_trial_not_asha(self, rung, good_trial_args):
+    def test_get_trial_to_promote_not_asha(self, rung, good_trial_args):
+        maximum_score = 9999999
         for i in range(rung.num_required_trial-1):
             trial = AshaTrial(**good_trial_args)
             register_scores_to_trial(trial, [val for val in range(rung.resource)])
             rung.add_new_trial(trial)
         
-        assert rung.has_promotable_trial() == False
+        assert rung.get_trial_to_promote() is None
 
         trial = AshaTrial(**good_trial_args)
-        register_scores_to_trial(trial, [val for val in range(rung.resource)])
+        register_scores_to_trial(trial, [maximum_score for _ in range(rung.resource)])
         rung.add_new_trial(trial)
-        assert rung.has_promotable_trial() == True
+        assert rung.get_trial_to_promote() == trial
 
         num_promoteable = rung._num_required_trial // rung._reduction_factor
         for _ in range(num_promoteable-1):
-            best_trial = rung.get_best_trial()
+            best_trial = rung.get_trial_to_promote()
             best_trial.rung += 1
-            assert rung.has_promotable_trial(False) == True
+            assert rung.get_trial_to_promote(False) is not None
 
-        best_trial = rung.get_best_trial()
+        best_trial = rung.get_trial_to_promote()
         best_trial.rung += 1
-        assert rung.has_promotable_trial(False) == False
+        assert rung.get_trial_to_promote(False) is None
 
-    def test_has_promotable_trial_asha(self, rung, good_trial_args):
+    def test_get_trial_to_promote_asha(self, rung, good_trial_args):
         num_promoteable = rung._num_required_trial // rung._reduction_factor
         for i in range(num_promoteable // rung._reduction_factor):
             for _ in range(rung._reduction_factor):
@@ -222,10 +235,10 @@ class TestRung:
                 register_scores_to_trial(trial, [val for val in range(rung.resource)])
                 rung.add_new_trial(trial)
 
-            assert rung.has_promotable_trial(True) == True
-            best_trial = rung.get_best_trial()
+            assert rung.get_trial_to_promote(True) is not None
+            best_trial = rung.get_trial_to_promote(True)
             best_trial.rung += 1
-            assert rung.has_promotable_trial(True) == False
+            assert rung.get_trial_to_promote(True) is None
 
     def test_trial_is_done(self, rung, trial):
         register_scores_to_trial(trial, [val for val in range(rung.resource-1)])
@@ -288,34 +301,35 @@ class TestBracket:
         assert len(bracket.hyper_parameter_configurations) == num_hyper_parameter_configurations - 1
         assert new_trial.id in bracket._trials
 
-    def test_promote_trial(self, bracket):
+    def test_promote_trial_if_available(self, bracket):
         self._make_all_first_rung_trials_done(bracket)
 
         rung_idx = 0
         while rung_idx < bracket.max_rung:
-            if bracket._rungs[rung_idx].has_promotable_trial():
-                trial = bracket._promote_trial(rung_idx)
-                assert trial != None # If promotable trials exists and not in max_rung, should return trials
+            trial_to_promote = bracket._rungs[rung_idx].get_trial_to_promote(mode=bracket._mode)
+            if  trial_to_promote is not None:
+                trial = bracket._promote_trial_if_available(rung_idx)
+                assert trial == trial_to_promote # If promotable trials exists and not in max_rung, should return trials
                 for idx in range(bracket._rungs[rung_idx+1].resource - bracket._rungs[rung_idx].resource):
                     trial.register_score(idx, bracket._rungs[rung_idx].resource + idx + 1)
             elif bracket._rungs[rung_idx].is_done():
-                trial = bracket._promote_trial(rung_idx)
-                assert trial == None # if promotable trials doesn't exist, return None
+                trial = bracket._promote_trial_if_available(rung_idx)
+                assert trial is None # if promotable trials doesn't exist, return None
 
                 rung_idx += 1
                 print(bracket.max_rung, "/", rung_idx)
 
-        trial = bracket._promote_trial(rung_idx)
-        assert trial == None # if rung_idx is max_rung, return None
+        trial = bracket._promote_trial_if_available(rung_idx)
+        assert trial is None # if rung_idx is max_rung, return None
 
     def _make_all_first_rung_trials_done(self, bracket):
         for _ in range(bracket._rungs[0]._num_required_trial):
             new_trial = bracket._release_new_trial()
             register_scores_to_trial(new_trial, [score for score in range(bracket._rungs[0].resource)])
 
-    def test_prmote_trial_negative_rung_idx(self, bracket):
+    def test_promote_trial_if_available_negative_rung_idx(self, bracket):
         with pytest.raises(ValueError):
-            bracket._promote_trial(-1)
+            bracket._promote_trial_if_available(-1)
 
     def test_register_score(self, bracket):
         new_trial = bracket._release_new_trial()
@@ -398,17 +412,22 @@ class TestBracket:
     def test_get_best_trial_given_absent_trial(self, bracket):
         bracket.get_best_trial() == None
 
+    def test_get_best_trial_with_one_unfinished_trial(self, bracket):
+        trial = bracket.get_next_trial()
+        register_scores_to_trial(trial, [1])
+        best_trial = bracket.get_best_trial()
+        assert trial == best_trial
+
 class TestHyperBand:
     def test_init(self, good_hyperband_args):
         hb = HyperBand(**good_hyperband_args)
-        max_bracket_idx = math.floor(
+        num_bracket = math.floor(
             math.log(
                 good_hyperband_args["maximum_resource"] / good_hyperband_args["minimum_resource"],
                 good_hyperband_args["reduction_factor"]
             )
-        )
-        assert hb._max_bracket == max_bracket_idx
-        assert len(hb._brackets) == max_bracket_idx + 1
+        ) + 1
+        assert hb._num_bracket == num_bracket
 
     @pytest.mark.parametrize("minimum_resource", [-10, 0])
     def test_init_not_postive_maximum_resource(self, good_hyperband_args, minimum_resource):

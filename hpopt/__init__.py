@@ -17,6 +17,8 @@ from hpopt.hpo_ui import (
     reportOOM,
 )
 
+from hpopt.hpo_runner import run_hpo
+
 __all__ = [
     "report",
     "reportOOM",
@@ -31,4 +33,5 @@ __all__ = [
     "get_best_score_with_num_imgs",
     "finalize_trial",
     "load_json",
+    "run_hpo",
 ]

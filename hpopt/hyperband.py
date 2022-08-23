@@ -1,5 +1,4 @@
 import math
-from turtle import screensize
 from typing import Any, Dict, List, Optional, Union
 
 from pyDOE.doe_lhs import lhs as latin_hypercube_sample
@@ -87,7 +86,10 @@ class Rung:
             if trial.rung != self.rung_idx:
                 continue
             trial_score = trial.get_best_score(mode, self.resource)
-            if best_score is None or left_is_better(trial_score, best_score, mode):
+            if (
+                trial_score is not None
+                and (best_score is None or left_is_better(trial_score, best_score, mode))
+            ):
                 best_trial = trial
                 best_score = trial_score
 
@@ -104,23 +106,34 @@ class Rung:
                 return False
         return True
 
-    def has_promotable_trial(self, asynchronous_sha: bool = False):
+    def get_trial_to_promote(self, asynchronous_sha: bool = False, mode: str = "max"):
         num_finished_trial = 0
         num_promoted_trial = 0
+        best_score = None
+        best_trial = None
+
         for trial in self._trials:
             if trial.rung == self._rung_idx:
                 if self.trial_is_done(trial):
                     num_finished_trial += 1
+                    trial_score = trial.get_best_score(mode, self.resource)
+                    if best_score is None or left_is_better(trial_score, best_score, mode):
+                        best_trial = trial
+                        best_score = trial_score
             else:
                 num_promoted_trial += 1
 
         if asynchronous_sha:
-            return (num_promoted_trial + num_finished_trial) // self._reduction_factor > num_promoted_trial
+            if (num_promoted_trial + num_finished_trial) // self._reduction_factor > num_promoted_trial:
+                return best_trial
         else:
-            return (
+            if (
                 self.is_done()
                 and self._num_required_trial // self._reduction_factor > num_promoted_trial
-            )
+            ):
+                return best_trial
+
+        return None
 
     def trial_is_done(self, trial: AshaTrial):
         return trial.get_progress() >= self.resource
@@ -212,17 +225,16 @@ class Bracket:
 
         return new_trial
 
-    def _promote_trial(self, rung_idx: int):
+    def _promote_trial_if_available(self, rung_idx: int):
         check_not_negative(rung_idx, "rung_idx")
 
-        if (
-            not self._rungs[rung_idx].has_promotable_trial(self._asynchronous_sha)
-            or self.max_rung <= rung_idx
-        ):
+        if self.max_rung <= rung_idx:
             return None
 
-        best_trial = self._rungs[rung_idx].get_best_trial(self._mode)
-        self._rungs[rung_idx+1].add_new_trial(best_trial)
+        best_trial = self._rungs[rung_idx].get_trial_to_promote(self._asynchronous_sha, self._mode)
+        if best_trial is not None:
+            self._rungs[rung_idx+1].add_new_trial(best_trial)
+
         return best_trial
 
     def register_score(self, score: Union[float, int], resource: Union[float, int], trial_id: Any):
@@ -231,9 +243,10 @@ class Bracket:
     def get_next_trial(self):
         next_sample = None
         for current_rung in range(self.max_rung-1, -1, -1):
-            if self._rungs[current_rung].has_promotable_trial(self._asynchronous_sha):
-                next_sample = self._promote_trial(current_rung)
+            next_sample = self._promote_trial_if_available(current_rung)
+            if next_sample is not None:
                 break
+
         if next_sample is None:
             next_sample = self._release_new_trial()
 
@@ -248,9 +261,10 @@ class Bracket:
 
         trial = None
         for rung in reversed(self._rungs):
-            if rung.is_done():
-                trial = rung.get_best_trial(self._mode)
-                break
+            trial = rung.get_best_trial(self._mode)
+            if trial is None:
+                continue
+            break
 
         return trial
 
@@ -291,14 +305,14 @@ class HyperBand(HpoBase):
 
         if num_brackets is not None:
             check_positive(num_brackets, "num_brackets")
-            self._max_bracket = num_brackets - 1
+            self._num_bracket = num_brackets
         else:
-            self._max_bracket = math.floor(
+            self._num_bracket = math.floor(
                 math.log(
                     self.maximum_resource / minimum_resource,
                     reduction_factor
                 )
-            )
+            ) + 1
         self._reduction_factor = reduction_factor
         self._minimum_resource = minimum_resource
         self._asynchronous_sha = asynchronous_sha
@@ -306,9 +320,9 @@ class HyperBand(HpoBase):
         self._brackets: List[Bracket] = []
         # bracket order is the opposite of order of paper's.
         # this is for running default hyper parmeters with abundant resource.
-        for idx in range(self._max_bracket + 1):
+        for idx in range(self._num_bracket):
             num_bracket_trials = math.ceil(
-                (self._max_bracket + 1)
+                self._num_bracket
                 * (self._reduction_factor ** idx)
                 / (idx + 1)
             )

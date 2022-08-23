@@ -4,14 +4,11 @@
 
 import json
 import math
-import multiprocessing
 import os
 from abc import ABC, abstractmethod
-from os import path as osp
 from typing import Any, Dict, List, Optional, Union
 
 import hpopt
-from hpopt.hpo_runner import run_hpo_loop
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
 from hpopt.utils import check_mode_input, check_positive
@@ -167,23 +164,6 @@ class HpoBase(ABC):
 
         return False
 
-    def run_hpo(self, train_func):
-        mp = multiprocessing.get_context("spawn")
-        parent_conn, child_conn = mp.Pipe()
-        p = mp.Process(
-            target=run_hpo_loop,
-            args=(
-                self,
-                train_func,
-                child_conn
-            )
-        )
-        p.start()
-        best_config = parent_conn.recv()
-        p.join()
-
-        return best_config
-
     @abstractmethod
     def is_done(self):
         raise NotImplementedError
@@ -231,7 +211,7 @@ class Trial:
         self._configuration["iterations"] = iter
 
     def register_score(self, score: Union[int, float], resource: Union[int, float]):
-        check_positive(resource)
+        check_positive(resource, "resource")
         self.score[resource] = score
 
     def get_best_score(self, mode: str = "max", resource_limit: Optional[Union[float, int]] = None):
