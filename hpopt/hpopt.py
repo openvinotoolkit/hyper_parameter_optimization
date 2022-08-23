@@ -725,6 +725,7 @@ def reportOOM(config):
                        This include train confiuration(e.g. hyper parameter, epoch, etc.)
                        and tiral information.
     """
+    logger.warning("CUDA out of memory arises. batch size search space will be decreased.")
     trial_results = {}
     trial_results["status"] = Status.CUDAOOM
     trial_results["scores"] = []
