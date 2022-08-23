@@ -581,8 +581,8 @@ class AsyncHyperBand(HpOpt):
             trial_file_path = hpopt.get_trial_path(self.save_path, trial_id)
             trial_results = hpopt.load_json(trial_file_path)
             if trial_results is not None:
-                images = trial_results.get("images", None)
-                if images is not None:
+                images = trial_results.get("images", [])
+                if not images:
                     num_trained_images += images[-1]
 
         return num_trained_images
