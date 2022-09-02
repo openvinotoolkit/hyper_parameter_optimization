@@ -47,12 +47,13 @@ class AsyncHyperBand(HpOpt):
     ):
         super(AsyncHyperBand, self).__init__(**kwargs)
         if min_iterations is not None:
-            if type(min_iterations) != int:
-                raise TypeError("min_iterations should be int type")
-            elif min_iterations < 1:
+            if min_iterations < 0:
                 raise ValueError(
-                    f"min_iterations should be bigger than 1. Your value is {min_iterations}"
+                    f"min_iterations should be positive or 0. Your value is {min_iterations}"
                 )
+            elif min_iterations == 0:
+                min_iterations = 1
+                logger.info("min_iteration is set to 1.")
 
         if type(reduction_factor) != int:
             raise TypeError("reduction_factor should be int type")
