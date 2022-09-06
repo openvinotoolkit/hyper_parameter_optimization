@@ -7,9 +7,11 @@ from typing import Any, Callable, Dict, Optional, Union
 
 from hpopt.hpo_base import HpoBase, Trial
 from hpopt.logger import get_logger
+from hpopt.utils import check_positive
 
 try:
     import pynvml
+    from pynvml import NVMLError
 except ImportError:
     pynvml = None
 
@@ -31,6 +33,8 @@ class ResourceManager(ABC):
 
 class CPUResourceManager(ResourceManager):
     def __init__(self, num_parallel_trial: int = 4):
+        check_positive(num_parallel_trial, "num_parallel_trial")
+
         self._num_parallel_trial = num_parallel_trial
         self._usage_status = []
 
@@ -56,13 +60,31 @@ class CPUResourceManager(ResourceManager):
 
 class GPUResourceManager(ResourceManager):
     def __init__(self, num_gpu_for_single_trial: int = 1, available_gpu: Optional[str] = None):
+        check_positive(num_gpu_for_single_trial, "num_gpu_for_single_trial")
+
         self._num_gpu_for_single_trial = num_gpu_for_single_trial
+        self._available_gpu = self._set_available_gpu(available_gpu)
         self._usage_status = {}
-        if self._available_gpu is None:
+
+    def _set_available_gpu(self, available_gpu: Optional[str] = None):
+        if available_gpu is None:
+            if pynvml is None:
+                raise RuntimeError("If pynvml can't be imported, you should set availabe_gpu.")
+            pynvml.nvmlInit()
             num_gpus = pynvml.nvmlDeviceGetCount()
-            self._available_gpu = [val for val in range(num_gpus)]
+            pynvml.nvmlShutdown()
+            available_gpu = [val for val in range(num_gpus)]
         else:
-            self._available_gpu = [int(val) for val in available_gpu.split(',')]
+            for val in available_gpu.split(','):
+                if not val.isnumeric():
+                    raise ValueError(
+                        "available_gpu format is wrong. "
+                        "available_gpu should only have numbers delimited by ','.\n"
+                        f"your value is {available_gpu}"
+                    )
+            available_gpu = [int(val) for val in available_gpu.split(',')]
+
+        return available_gpu
 
     def reserve_resource(self, trial_id):
         if not self.have_available_resource():
@@ -93,6 +115,20 @@ def get_resource_manager(
     num_gpu_for_single_trial: Optional[int] = None,
     available_gpu: Optional[str] = None,
 ):
+    if resource_type == "gpu":
+        if pynvml is None and available_gpu is None:
+            logger.warning(
+                "pynvml isn't installed and available gpu aren't specified. resource type is modified to cpu."
+            )
+            resource_type = "cpu"
+        else:
+            try:
+                pynvml.nvmlInit()
+                pynvml.nvmlShutdown()
+            except NVMLError:
+                logger.warning("GPU can't be used now. resource type is modified to cpu.")
+                resource_type = "cpu"
+
     if resource_type == "cpu":
         args = {"num_parallel_trial" : num_parallel_trial}
         args = _remove_none_from_dict(args)
@@ -111,16 +147,27 @@ def _remove_none_from_dict(d: Dict):
     return d
 
 class HpoLoop:
-    def __init__(self, hpo_algo: HpoBase, train_func: Callable, resource_manager: Optional[ResourceManager] = None):
+    def __init__(
+        self,
+        hpo_algo: HpoBase,
+        train_func: Callable,
+        resource_type: str = "gpu",
+        num_parallel_trial: Optional[int] = None,
+        num_gpu_for_single_trial: Optional[int] = None,
+        available_gpu: Optional[str] = None,
+    ):
         self._hpo_algo = hpo_algo
         self._train_func = train_func
         self._running_trials: Dict[int, Process] = {}
         self._mp = multiprocessing.get_context("spawn")
         self._report_queue = self._mp.Queue()
         self._uid_index = 0
-        self._resource_manager = resource_manager
-        if self._resource_manager is None:
-            self._resource_manager = get_resource_manager("cpu")
+        self._resource_manager = get_resource_manager(
+            resource_type,
+            num_parallel_trial,
+            num_gpu_for_single_trial,
+            available_gpu
+        )
 
     def run(self):
         logger.info("HPO loop starts.")
@@ -149,7 +196,7 @@ class HpoLoop:
             target=_run_train,
             args=(
                 self._train_func,
-                trial.configuration,
+                trial.get_train_configuration(),
                 partial(_report_score, report_queue=self._report_queue, trial_id=trial.id),
                 env
             )
@@ -176,6 +223,8 @@ class HpoLoop:
                 report["progress"],
                 report["trial_id"],
             )
+
+        self._hpo_algo.save_results()
     
     def _join_all_processes(self):
         for p in self._running_trials.values():
@@ -210,20 +259,14 @@ def _report_score(
         }
     )
 
-def run_hpo(
+def run_hpo_loop(
     hpo_algo: HpoBase,
     train_func: Callable,
-    resource_type: str = "cpu",
+    resource_type: str = "gpu",
     num_parallel_trial: Optional[int] = None,
     num_gpu_for_single_trial: Optional[int] = None,
     available_gpu: Optional[str] = None,
 ):
-    resource_manager = get_resource_manager(
-        resource_type,
-        num_gpu_for_single_trial,
-        available_gpu,
-        num_parallel_trial
-    )
-    hpo_loop = HpoLoop(hpo_algo, train_func, resource_manager)
+    hpo_loop = HpoLoop(hpo_algo, train_func, resource_type, num_parallel_trial, num_gpu_for_single_trial,available_gpu)
     best_config = hpo_loop.run()
     return best_config

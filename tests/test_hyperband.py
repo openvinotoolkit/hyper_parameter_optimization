@@ -3,6 +3,8 @@
 #
 
 import math
+import json
+from os import path as osp
 
 import pytest
 from hpopt import hyperband
@@ -10,7 +12,7 @@ from hpopt.hyperband import AshaTrial, Rung, Bracket, HyperBand
 
 @pytest.fixture
 def good_trial_args():
-    return {"id" : "name", "configuration" : {"hp1" : 1, "hp2" : 1.2}}
+    return {"id" : "name", "configuration" : {"hp1" : 1, "hp2" : 1.2}, "train_environment" : {"subset_ratio" : 0.5}}
 
 @pytest.fixture
 def trial(good_trial_args):
@@ -102,6 +104,23 @@ class TestAshaTrial:
         with pytest.raises(ValueError):
             trial.rung = rung_val
 
+    def test_save_results(self, trial, tmp_path):
+        rung_idx = 3
+        trial.rung = rung_idx
+        register_scores_to_trial(trial)
+        save_path = osp.join(tmp_path, "test")
+        trial.save_results(save_path)
+
+        with open(save_path, "r") as f:
+            result = json.load(f)
+        assert result["id"] == "name"
+        assert result["configuration"]["hp1"] == 1
+        assert result["configuration"]["hp2"] == 1.2
+        assert result["train_environment"]["subset_ratio"] == 0.5
+        assert result["rung"] == rung_idx
+        for key, val in result["score"].items():
+            assert int(key)-1 == val
+
 class TestRung:
     def test_init(self, good_rung_args):
         Rung(**good_rung_args)
@@ -179,6 +198,20 @@ class TestRung:
     def test_get_best_trial_wrong_mode_val(self, rung):
         with pytest.raises(ValueError):
             rung.get_best_trial("wrong")
+
+    def test_need_more_trials(self, rung, good_trial_args):
+        for _ in range(rung.num_required_trial):
+            trial = AshaTrial(**good_trial_args)
+            assert rung.need_more_trials() == True
+            rung.add_new_trial(trial)
+
+        assert rung.need_more_trials() == False
+
+    def test_get_num_trials_started(self, rung, good_trial_args):
+        for idx in range(rung.num_required_trial):
+            trial = AshaTrial(**good_trial_args)
+            rung.add_new_trial(trial)
+            assert rung.get_num_trials_started() == idx+1
 
     def test_need_more_trails(self, rung, good_trial_args):
         for i in range(1, rung.num_required_trial+1):
@@ -418,6 +451,36 @@ class TestBracket:
         best_trial = bracket.get_best_trial()
         assert trial == best_trial
 
+    def test_save_results(self, good_bracket_args, tmp_path):
+        trial_num = len(good_bracket_args["hyper_parameter_configurations"])
+        bracket = Bracket(**good_bracket_args)
+        while True:
+            trial = bracket.get_next_trial()
+            if trial is None:
+                break
+
+            register_scores_to_trial(
+                trial,
+                [score for score in range(bracket._rungs[trial.rung].resource - trial.get_progress())]
+            )
+
+        bracket.save_results(tmp_path)
+
+        with open(osp.join(tmp_path, "rung_status.json"), "r") as f:
+            result = json.load(f)
+
+        assert result["minimum_resource"] == good_bracket_args["minimum_resource"]
+        assert result["maximum_resource"] == good_bracket_args["maximum_resource"]
+        assert result["reduction_factor"] == good_bracket_args["reduction_factor"]
+        assert result["mode"] == good_bracket_args["mode"]
+        assert result["asynchronous_sha"] == good_bracket_args["asynchronous_sha"]
+        assert result["num_trials"] == trial_num
+        assert len(result["rung_status"]) == bracket.max_rung + 1
+        for rung_status in result["rung_status"]:
+            assert rung_status["num_trial_started"] == rung_status["num_required_trial"]
+        for i in range(trial_num):
+            assert osp.exists(osp.join(tmp_path, f"{i}.json")) == True
+
 class TestHyperBand:
     def test_init(self, good_hyperband_args):
         hb = HyperBand(**good_hyperband_args)
@@ -527,3 +590,8 @@ class TestHyperBand:
     def test_get_best_config_before_train(self, hyper_band):
         best_config = hyper_band.get_best_config()
         assert best_config == None
+
+    def test_train_option_exists(self, hyper_band):
+        trial = hyper_band.get_next_sample()
+        train_config = trial.get_train_configuration()
+        assert "subset_ratio" in train_config["train_environment"]

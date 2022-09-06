@@ -1,9 +1,12 @@
+import json
 import pytest
+from os import path as osp
+
 from hpopt.hpo_base import Trial
 
 @pytest.fixture
 def good_trial_args():
-    return {"id" : "name", "configuration" : {"hp1" : 1, "hp2" : 1.2}}
+    return {"id" : "name", "configuration" : {"hp1" : 1, "hp2" : 1.2}, "train_environment" : {"subset_ratio" : 0.5}}
 
 @pytest.fixture
 def trial(good_trial_args):
@@ -29,6 +32,18 @@ class TestTrial:
     def test_set_negative_iteration(self, trial, iter_val):
         with pytest.raises(ValueError):
             trial.set_iterations(iter_val)
+
+    def test_get_train_configuration(self, good_trial_args):
+        trial = Trial(**good_trial_args)
+        train_config = trial.get_train_configuration()
+        assert train_config["configuration"] == good_trial_args["configuration"]
+        assert train_config["train_environment"] == good_trial_args["train_environment"]
+
+    def test_get_train_configuration_without_train_env(self, good_trial_args):
+        del good_trial_args["train_environment"]
+        trial = Trial(**good_trial_args)
+        train_config = trial.get_train_configuration()
+        assert train_config["train_environment"] == None
 
     @pytest.mark.parametrize("score", [-10, 12.5])
     def test_register_score(self, trial, score):
@@ -81,3 +96,18 @@ class TestTrial:
 
     def test_get_progress_not_trained_at_all(self, trial):
         assert trial.get_progress() == 0
+
+    def test_save_results(self, trial, tmp_path):
+        register_scores_to_trial(trial)
+        save_path = osp.join(tmp_path, "test")
+        trial.save_results(save_path)
+
+        with open(save_path, "r") as f:
+            result = json.load(f)
+
+        assert result["id"] == "name"
+        assert result["configuration"]["hp1"] == 1
+        assert result["configuration"]["hp2"] == 1.2
+        assert result["train_environment"]["subset_ratio"] == 0.5
+        for key, val in result["score"].items():
+            assert int(key)-1 == val

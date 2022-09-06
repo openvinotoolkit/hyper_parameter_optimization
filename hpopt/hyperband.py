@@ -1,4 +1,7 @@
 import math
+import os
+import json
+from os import path as osp
 from typing import Any, Dict, List, Optional, Union
 
 from pyDOE.doe_lhs import lhs as latin_hypercube_sample
@@ -26,9 +29,10 @@ class AshaTrial(Trial):
     def __init__(
         self,
         id: Any,
-        configuration: Dict
+        configuration: Dict,
+        train_environment: Optional[Dict] = None
     ):
-        super().__init__(id, configuration)
+        super().__init__(id, configuration, train_environment)
         self._rung = 0
 
     @property
@@ -39,6 +43,19 @@ class AshaTrial(Trial):
     def rung(self, val: int):
         check_not_negative(val, "rung")
         self._rung = val
+
+    def save_results(self, save_path: str):
+        results = {
+            "id" : self.id,
+            "rung" : self.rung,
+            "configuration" : self.configuration,
+            "train_environment" : self.train_environment,
+            "score" : {resource : score for resource, score in self.score.items()}
+        }
+
+        with open(save_path, "w") as f:
+            json.dump(results, f)
+
 
 class Rung:
     def __init__(
@@ -96,7 +113,10 @@ class Rung:
         return best_trial
 
     def need_more_trials(self):
-        return self.num_required_trial != len(self._trials)
+        return self.num_required_trial > self.get_num_trials_started()
+
+    def get_num_trials_started(self):
+        return len(self._trials)
 
     def is_done(self):
         if self.need_more_trials():
@@ -165,7 +185,7 @@ class Bracket:
             raise ValueError(
                 "number of hyper_parameter_configurations is not enough. "
                 f"minimum number is {minimum_num_trials}, but current number is {self._num_trials}. "
-                "if you want to let them be, you can reduce needed number "
+                "if you want to let them be, you can decrease needed number "
                 "by increasing reduction factor or minimum resource."
             )
 
@@ -268,6 +288,30 @@ class Bracket:
 
         return trial
 
+    def save_results(self, save_path: str):
+        result = {
+            "minimum_resource" : self._minimum_resource,
+            "maximum_resource" : self.maximum_resource,
+            "reduction_factor" : self._reduction_factor,
+            "mode" : self._mode,
+            "asynchronous_sha" : self._asynchronous_sha,
+            "num_trials" : self._num_trials,
+            "rung_status" : [
+                {
+                    "rung_idx" : rung.rung_idx,
+                    "num_trial_started" : rung.get_num_trials_started(),
+                    "num_required_trial" : rung.num_required_trial,
+                    "resource" : rung.resource
+
+                } for rung in self._rungs
+            ]
+        }
+        with open(osp.join(save_path, "rung_status.json"), "w") as f:
+            json.dump(result, f)
+
+        for trial_id, trial in self._trials.items():
+            trial.save_results(osp.join(save_path, f"{trial_id}.json"))
+
 class HyperBand(HpoBase):
     """
     This implements the Asyncronous HyperBand scheduler with iterations only.
@@ -291,7 +335,7 @@ class HyperBand(HpoBase):
 
     def __init__(
         self,
-        minimum_resource: Union[int, float] = 1,
+        minimum_resource: Optional[Union[int, float]] = None,
         reduction_factor: int = 3,
         num_brackets: Optional[int] = None,
         asynchronous_sha: bool = True,
@@ -300,26 +344,33 @@ class HyperBand(HpoBase):
     ):
         super(HyperBand, self).__init__(**kwargs)
 
-        check_positive(minimum_resource, "minimum_resource")
+        if minimum_resource is None:
+            pass
+        else:
+            check_positive(minimum_resource, "minimum_resource")
         _check_reduction_factor_value(reduction_factor)
 
-        if num_brackets is not None:
-            check_positive(num_brackets, "num_brackets")
-            self._num_bracket = num_brackets
-        else:
-            self._num_bracket = math.floor(
-                math.log(
-                    self.maximum_resource / minimum_resource,
-                    reduction_factor
-                )
-            ) + 1
         self._reduction_factor = reduction_factor
         self._minimum_resource = minimum_resource
         self._asynchronous_sha = asynchronous_sha
         self._asynchronous_bracket = asynchronous_bracket
-        self._brackets: List[Bracket] = []
-        # bracket order is the opposite of order of paper's.
-        # this is for running default hyper parmeters with abundant resource.
+        if num_brackets is not None:
+            check_positive(num_brackets, "num_brackets")
+            self._num_bracket = num_brackets
+        else:
+            self._num_bracket = self._calculate_num_bracket()
+        self._brackets: List[Bracket] = self._make_brackets()
+
+    def _calculate_num_bracket(self):
+        return math.floor(math.log(self.maximum_resource / self._minimum_resource, self._reduction_factor)) + 1
+
+    def _make_brackets(self):
+        """
+        bracket order is the opposite of order of paper's.
+        this is for running default hyper parmeters with abundant resource.
+        """
+        brackets = []
+
         for idx in range(self._num_bracket):
             num_bracket_trials = math.ceil(
                 self._num_bracket
@@ -335,7 +386,9 @@ class HyperBand(HpoBase):
                 self.mode,
                 self._asynchronous_sha
             )
-            self._brackets.append(bracket)
+            brackets.append(bracket)
+
+        return brackets
 
     def _make_new_hyper_parameter_configs(
         self,
@@ -354,10 +407,15 @@ class HyperBand(HpoBase):
             hyper_parameter_configurations.append(
                 AshaTrial(
                     trial_id_prefix + str(idx),
-                    self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key)
+                    self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key),
+                    self._get_train_environment()
                 )
             )
         return hyper_parameter_configurations
+
+    def _get_train_environment(self):
+        train_environment = {"subset_ratio" : self.subset_ratio}
+        return train_environment
 
     def get_next_sample(self):
         next_sample = None
@@ -369,6 +427,12 @@ class HyperBand(HpoBase):
                 break
 
         return next_sample
+
+    def save_results(self):
+        for idx, bracket in enumerate(self._brackets):
+            save_path = osp.join(self.save_path, str(idx))
+            os.makedirs(save_path, exist_ok=True)
+            bracket.save_results(save_path)
 
     def auto_config(self):
         raise NotImplementedError
