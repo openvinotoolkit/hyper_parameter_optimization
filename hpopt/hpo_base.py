@@ -59,7 +59,7 @@ class HpoBase(ABC):
         non_pure_train_ratio: float = 0.2,
         full_dataset_size: int = 0,
         metric: str = "mAP",
-        expected_time_ratio: Union[int, float] = 4,
+        expected_time_ratio: Optional[Union[int, float]] = None,
         maximum_resource: Optional[Union[int, float]] = None,
         subset_ratio: Optional[Union[float, int]] = None,
         min_subset_size=500,
@@ -67,9 +67,9 @@ class HpoBase(ABC):
         verbose: int = 0,
         resume: bool = False,
         prior_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
+        acceptable_additional_time_ratio: Union[float, int] = 1.2
     ):
         check_mode_input(mode)
-        check_positive(expected_time_ratio, "expected_time_ratio")
         check_positive(full_dataset_size, "full_dataset_size")
         check_positive(num_full_iterations, "num_full_iterations")
         if not (0 < non_pure_train_ratio <= 1):
@@ -106,6 +106,7 @@ class HpoBase(ABC):
         self.hpo_status: dict = {}
         self.metric = metric
         self.batch_size_name = batch_size_name
+        self.acceptable_additional_time_ratio = acceptable_additional_time_ratio
         self.prior_hyper_parameters = prior_hyper_parameters
         if isinstance(self.prior_hyper_parameters, dict):
             self.prior_hyper_parameters = [self.prior_hyper_parameters]

@@ -4,6 +4,7 @@
 
 import math
 import json
+from math import ceil
 from os import path as osp
 
 import pytest
@@ -76,7 +77,7 @@ def good_hyperband_args():
         "metric" : "mAP",
         "maximum_resource" : 64,
         "minimum_resource" : 1,
-        "reduction_factor" : 2,
+        "reduction_factor" : 4,
         "asynchronous_sha" : True,
         "asynchronous_bracket" : True
     }
@@ -328,6 +329,22 @@ class TestBracket:
         )
         assert bracket.max_rung == expected_val
 
+    def test_calcuate_max_rung(self):
+        minimum_resource = 1
+        maximum_resource = 100
+        reduction_factor = 3
+
+        expected_val = math.ceil(math.log(maximum_resource / minimum_resource, reduction_factor))
+        assert Bracket.calcuate_max_rung_idx(minimum_resource, maximum_resource, reduction_factor) == expected_val
+
+    @pytest.mark.parametrize(
+        "minimum_resource,maximum_resource,reduction_factor",
+        [(-1, 100, 3), (1, -3, 3), (1, 100, -2), (10, 3, 3)]
+    )
+    def test_calcuate_max_rung_with_wrong_input(self, minimum_resource, maximum_resource, reduction_factor):
+        with pytest.raises(ValueError):
+            Bracket.calcuate_max_rung_idx(minimum_resource, maximum_resource, reduction_factor)
+
     def test_release_new_trial(self, bracket):
         num_hyper_parameter_configurations = len(bracket.hyper_parameter_configurations)
         new_trial = bracket._release_new_trial()
@@ -495,14 +512,7 @@ class TestBracket:
 
 class TestHyperBand:
     def test_init(self, good_hyperband_args):
-        hb = HyperBand(**good_hyperband_args)
-        num_bracket = math.floor(
-            math.log(
-                good_hyperband_args["maximum_resource"] / good_hyperband_args["minimum_resource"],
-                good_hyperband_args["reduction_factor"]
-            )
-        ) + 1
-        assert hb._num_bracket == num_bracket
+        HyperBand(**good_hyperband_args)
 
     @pytest.mark.parametrize("minimum_resource", [-10, 0])
     def test_init_not_postive_maximum_resource(self, good_hyperband_args, minimum_resource):
@@ -515,14 +525,6 @@ class TestHyperBand:
     def test_init_wrong_reduction_factor(selfe, good_hyperband_args, reduction_factor):
         wrong_arg = good_hyperband_args
         wrong_arg["reduction_factor"] = reduction_factor
-        with pytest.raises(ValueError):
-            HyperBand(**wrong_arg)
-
-
-    @pytest.mark.parametrize("num_brackets", [-10, 0])
-    def test_init_not_positive_num_brackets(self, good_hyperband_args, num_brackets):
-        wrong_arg = good_hyperband_args
-        wrong_arg["num_brackets"] = num_brackets
         with pytest.raises(ValueError):
             HyperBand(**wrong_arg)
 
@@ -624,3 +626,25 @@ class TestHyperBand:
 
         assert first_trial.configuration == prior1
         assert second_trial.configuration == prior2
+
+    def test_auto_config(self, good_hyperband_args):
+        full_train_resource = good_hyperband_args["maximum_resource"]
+        expected_time_ratio = 4
+        good_hyperband_args["expected_time_ratio"] = expected_time_ratio
+        hyperband = HyperBand(**good_hyperband_args)
+
+        total_resource = 0
+        while True:
+            trial = hyperband.get_next_sample()
+            if trial is None:
+                break
+
+            resource = ceil(trial.iteration - trial.get_progress())
+            total_resource += resource
+
+            register_scores_to_trial(
+                trial,
+                [score for score in range(resource)]
+            )
+
+        assert full_train_resource * expected_time_ratio * hyperband.acceptable_additional_time_ratio >= total_resource

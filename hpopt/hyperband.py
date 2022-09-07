@@ -228,12 +228,24 @@ class Bracket:
 
     @property
     def max_rung(self):
-        return math.ceil(
-            math.log(
-                self.maximum_resource / self._minimum_resource,
-                self._reduction_factor
+        return self.calcuate_max_rung_idx(self._minimum_resource, self.maximum_resource, self._reduction_factor)
+
+    @staticmethod
+    def calcuate_max_rung_idx(
+        minimum_resource: Union[float, int],
+        maximum_resource: Union[float, int],
+        reduction_factor: int
+    ):
+        check_positive(minimum_resource, "minimum_resource")
+        check_positive(maximum_resource, "maximum_resource")
+        check_positive(reduction_factor, "reduction_factor")
+        if minimum_resource > maximum_resource:
+            raise ValueError(
+                "maximum_resource should be bigger than minimum_resource. "
+                f"but minimum_resource : {minimum_resource} / maximum_resource : {maximum_resource}"
             )
-        )
+
+        return math.ceil(math.log(maximum_resource / minimum_resource, reduction_factor))
 
     def _release_new_trial(self):
         if not self.hyper_parameter_configurations:
@@ -337,15 +349,12 @@ class HyperBand(HpoBase):
             The units are the same as the attribute named by `time_attr`.
         reduction_factor (float): Used to set halving rate and amount. This
             is simply a unit-less scalar.
-        num_brackets (int): Number of brackets. Each bracket has a different
-            halving rate, specified by the reduction factor.
     """
 
     def __init__(
         self,
         minimum_resource: Optional[Union[int, float]] = None,
         reduction_factor: int = 3,
-        num_brackets: Optional[int] = None,
         asynchronous_sha: bool = True,
         asynchronous_bracket: bool = False,
         **kwargs
@@ -363,29 +372,69 @@ class HyperBand(HpoBase):
         self._minimum_resource = minimum_resource
         self._asynchronous_sha = asynchronous_sha
         self._asynchronous_bracket = asynchronous_bracket
-        if num_brackets is not None:
-            check_positive(num_brackets, "num_brackets")
-            self._num_bracket = num_brackets
+
+        if self._need_to_auto_config():
+            brackets_setting = self.auto_config()
         else:
-            self._num_bracket = self._calculate_num_bracket()
-        self._brackets: List[Bracket] = self._make_brackets()
+            brackets_setting = self._make_default_brackets_setting()
 
-    def _calculate_num_bracket(self):
-        return math.floor(math.log(self.maximum_resource / self._minimum_resource, self._reduction_factor)) + 1
+        self._brackets: List[Bracket] = self._make_brackets(brackets_setting)
 
-    def _make_brackets(self):
+    def _need_to_auto_config(self):
+        """check full ASHA resource exceeds expected_time_ratio."""
+        if self.expected_time_ratio is None:
+            return False
+
+        total_resource = 0
+        for idx in range(self._calculate_s_max()+1):
+            num_bracket_trials = self._calculate_num_trial_for_bracket(idx)
+            minimum_resource = self.maximum_resource * (self._reduction_factor ** -idx)
+            total_resource += self._calculate_bracket_resource(num_bracket_trials, minimum_resource)
+
+        return (
+            total_resource * self.expected_time_ratio * self.acceptable_additional_time_ratio
+            > self.maximum_resource
+        )
+
+    def _calculate_bracket_resource(self, num_trial: int, initial_resource: Union[int, float]):
+        """calculate how much resource is needed for the bracket given that resume is available."""
+        total_resource = 0
+        num_rungs = Bracket.calcuate_max_rung_idx(initial_resource, self.maximum_resource, self._reduction_factor) + 1
+        previous_resource = 0
+        resource = initial_resource
+
+        for _ in range(num_rungs):
+            total_resource += num_trial * (resource - previous_resource)
+            num_trial //= self._reduction_factor
+            previous_resource = resource
+            resource *= self._reduction_factor
+
+        return total_resource
+
+    def _calculate_num_trial_for_bracket(self, bracket_idx: int):
+        return math.ceil((self._calculate_s_max() + 1) * (self._reduction_factor ** bracket_idx) / (bracket_idx + 1))
+
+    def _calculate_s_max(self):
+        return math.floor(math.log(self.maximum_resource / self._minimum_resource, self._reduction_factor))
+
+    def _make_default_brackets_setting(self):
         """
         bracket order is the opposite of order of paper's.
         this is for running default hyper parmeters with abundant resource.
         """
-        brackets = []
-
-        for idx in range(self._num_bracket):
-            num_bracket_trials = math.ceil(
-                self._num_bracket
-                * (self._reduction_factor ** idx)
-                / (idx + 1)
+        brackets_setting = []
+        for idx in range(self._calculate_s_max() + 1):
+            brackets_setting.append(
+                {"bracket_index" : idx, "num_trials":  self._calculate_num_trial_for_bracket(idx)}
             )
+
+        return brackets_setting
+
+    def _make_brackets(self, brackets_setting: List[Dict]):
+        brackets = []
+        for bracket_setting in brackets_setting:
+            idx = bracket_setting["bracket_index"]
+            num_bracket_trials = bracket_setting["num_trials"]
             configurations = self._make_new_hyper_parameter_configs(num_bracket_trials, str(idx))
             bracket = Bracket(
                 self.maximum_resource * (self._reduction_factor ** -idx),
@@ -472,7 +521,44 @@ class HyperBand(HpoBase):
             bracket.save_results(save_path)
 
     def auto_config(self):
-        raise NotImplementedError
+        """
+        from bracket which has biggest number of rung, check that it's resource exceeds expected_time_ratio
+        if bracket is added. If not, bracket is added. If it does, check that number of trials for bracket
+        can be reduced. if not, skip that bracket and check that next bracket can be added by same method.
+        """
+        brackets_setting = []
+        resource_upper_bound = self.maximum_resource * self.expected_time_ratio * self.acceptable_additional_time_ratio
+
+        total_resource = 0
+        for idx in range(self._calculate_s_max(), -1, -1):
+            num_bracket_trials = self._calculate_num_trial_for_bracket(idx)
+            minimum_resource = self.maximum_resource * (self._reduction_factor ** -idx)
+            bracket_resource = self._calculate_bracket_resource(num_bracket_trials, minimum_resource)
+
+            if resource_upper_bound < total_resource + bracket_resource:
+                num_rungs = Bracket.calcuate_max_rung_idx(
+                    minimum_resource,
+                    self.maximum_resource,
+                    self._reduction_factor
+                )
+                minimum_num_trials = self._reduction_factor ** num_rungs
+
+                available_to_fit = False
+                for num_trials in range(num_bracket_trials, minimum_num_trials-1, -1):
+                    bracket_resource = self._calculate_bracket_resource(num_trials, minimum_resource)
+                    if resource_upper_bound >= total_resource + bracket_resource:
+                        available_to_fit = True
+                        break
+
+                if available_to_fit:
+                    num_bracket_trials = num_trials
+                else:
+                    continue
+
+            total_resource += bracket_resource
+            brackets_setting.insert(0, {"bracket_index" : idx, "num_trials" : num_bracket_trials})
+
+        return brackets_setting
 
     def get_progress(self):
         raise NotImplementedError
