@@ -25,13 +25,14 @@ class TestTrial:
         Trial(**good_trial_args)
 
     def test_set_iteration(self, trial):
-        trial.set_iterations(10)
-        assert trial.configuration["iterations"] == 10
+        trial.iteration = 10
+        config = trial.get_train_configuration()
+        assert config["configuration"]["iterations"] == 10
 
     @pytest.mark.parametrize("iter_val", [-10, 0])
     def test_set_negative_iteration(self, trial, iter_val):
         with pytest.raises(ValueError):
-            trial.set_iterations(iter_val)
+            trial.iteration = iter_val
 
     def test_get_train_configuration(self, good_trial_args):
         trial = Trial(**good_trial_args)

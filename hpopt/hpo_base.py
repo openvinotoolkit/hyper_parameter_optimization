@@ -107,6 +107,8 @@ class HpoBase(ABC):
         self.metric = metric
         self.batch_size_name = batch_size_name
         self.prior_hyper_parameters = prior_hyper_parameters
+        if isinstance(self.prior_hyper_parameters, dict):
+            self.prior_hyper_parameters = [self.prior_hyper_parameters]
 
     def print_results(self):
         field_widths = []
@@ -169,6 +171,7 @@ class Trial:
         self._configuration = configuration
         self.score: Dict[Union[float, int], Union[float, int]] = {}
         self._train_environment = train_environment
+        self._iteration = None
 
     @property
     def id(self):
@@ -179,15 +182,25 @@ class Trial:
         return self._configuration
 
     @property
+    def iteration(self):
+        return self._iteration
+
+    @iteration.setter
+    def iteration(self, val):
+        check_positive(val, "iteration")
+        self._iteration = val
+
+    @property
     def train_environment(self):
         return self._train_environment
 
     def get_train_configuration(self):
-        return {"configuration" : self.configuration, "train_environment" : self.train_environment}
-
-    def set_iterations(self, iter: Union[int, float]):
-        check_positive(iter, "iter")
-        self._configuration["iterations"] = iter
+        self._configuration["iterations"] = self.iteration
+        return {
+            "id" : self.id,
+            "configuration" : self.configuration,
+            "train_environment" : self.train_environment
+        }
 
     def register_score(self, score: Union[int, float], resource: Union[int, float]):
         check_positive(resource, "resource")

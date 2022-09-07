@@ -91,7 +91,7 @@ class Rung:
     def add_new_trial(self, trial: AshaTrial):
         if not self.need_more_trials():
             raise RuntimeError(f"{self.rung_idx} rung has already sufficient trials.")
-        trial.set_iterations(self.resource)
+        trial.iteration = self.resource
         trial.rung = self.rung_idx
         self._trials.append(trial)
 
@@ -312,6 +312,14 @@ class Bracket:
         for trial_id, trial in self._trials.items():
             trial.save_results(osp.join(save_path, f"{trial_id}.json"))
 
+    def report_trial_is_done(self, trial_id: Any):
+        trial = self._trials[trial_id]
+        if trial.get_progress() < trial.iteration:
+            best_score = trial.get_best_score()
+            if best_score is None:
+                raise RuntimeError(f"Although {trial_id} trial doesn't report any score but it's done")
+            self.register_score(best_score, trial.iteration, trial_id)
+
 class HyperBand(HpoBase):
     """
     This implements the Asyncronous HyperBand scheduler with iterations only.
@@ -350,6 +358,7 @@ class HyperBand(HpoBase):
             check_positive(minimum_resource, "minimum_resource")
         _check_reduction_factor_value(reduction_factor)
 
+        self._next_trial_id = 0
         self._reduction_factor = reduction_factor
         self._minimum_resource = minimum_resource
         self._asynchronous_sha = asynchronous_sha
@@ -395,23 +404,51 @@ class HyperBand(HpoBase):
         num: int,
         trial_id_prefix: Optional[str] = None
     ):
+        check_positive(num, "num")
+
         if trial_id_prefix is not None:
             trial_id_prefix = trial_id_prefix + "_"
         else:
             trial_id_prefix = ""
+        hp_configs = []
 
-        hyper_parameter_configurations = []
-        configurations = latin_hypercube_sample(len(self.search_space), num)
-        for idx, config in enumerate(configurations):
+        if self.prior_hyper_parameters is not None:
+            hp_configs.extend(self._get_prior_hyper_parameters(num, trial_id_prefix))
+
+        hp_configs.extend(self._get_random_hyper_parameter(num-len(hp_configs), trial_id_prefix))
+
+        return hp_configs
+
+    def _get_prior_hyper_parameters(self, num_samples: int, trial_id_prefix: str):
+        hp_configs = []
+        num_samples = min([num_samples, len(self.prior_hyper_parameters)])
+        for _ in range(num_samples):
+            hyper_parameter = self.prior_hyper_parameters.pop(0)
+            hp_configs.append(self._make_trial(trial_id_prefix + self._get_new_trial_id(), hyper_parameter))
+
+        return hp_configs
+
+    def _get_random_hyper_parameter(self, num_samples: int, trial_id_prefix: str):
+        hp_configs = []
+        configurations = latin_hypercube_sample(len(self.search_space), num_samples)
+        for config in configurations:
             config_with_key = {key : config[idx] for idx, key in enumerate(self.search_space)}
-            hyper_parameter_configurations.append(
-                AshaTrial(
-                    trial_id_prefix + str(idx),
+            hp_configs.append(
+                self._make_trial(
+                    trial_id_prefix + self._get_new_trial_id(),
                     self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key),
-                    self._get_train_environment()
                 )
             )
-        return hyper_parameter_configurations
+
+        return hp_configs
+
+    def _make_trial(self, id: str, hyper_parameter: Dict):
+        return AshaTrial(id, hyper_parameter, self._get_train_environment())
+
+    def _get_new_trial_id(self):
+        id = self._next_trial_id
+        self._next_trial_id += 1
+        return str(id)
 
     def _get_train_environment(self):
         train_environment = {"subset_ratio" : self.subset_ratio}
@@ -440,9 +477,12 @@ class HyperBand(HpoBase):
     def get_progress(self):
         raise NotImplementedError
 
-    def report_score(self, score: Union[float, int], resource: Union[float, int], trial_id: str):
+    def report_score(self, score: Union[float, int], resource: Union[float, int], trial_id: str, done: bool = False):
         bracket_idx = trial_id.split('_')[0]
-        self._brackets[int(bracket_idx)].register_score(score, resource, trial_id)
+        if done:
+            self._brackets[int(bracket_idx)].report_trial_is_done(trial_id)
+        else:
+            self._brackets[int(bracket_idx)].register_score(score, resource, trial_id)
 
     def is_done(self):
         for bracket in self._brackets:

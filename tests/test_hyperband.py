@@ -481,6 +481,18 @@ class TestBracket:
         for i in range(trial_num):
             assert osp.exists(osp.join(tmp_path, f"{i}.json")) == True
 
+    def test_report_trial_is_done(self, bracket):
+        trial = bracket.get_next_trial()
+        score = 10
+        bracket.register_score(score, trial.iteration-1, trial.id)
+        bracket.report_trial_is_done(trial.id)
+        assert trial.get_progress() == trial.iteration
+
+    def test_report_trial_is_done_without_reporting(self, bracket):
+        trial = bracket.get_next_trial()
+        with pytest.raises(RuntimeError):
+            bracket.report_trial_is_done(trial.id)
+
 class TestHyperBand:
     def test_init(self, good_hyperband_args):
         hb = HyperBand(**good_hyperband_args)
@@ -532,7 +544,7 @@ class TestHyperBand:
                 break
             register_scores_to_trial(
                 trial,
-                [val for val in range(int(trial.configuration["iterations"] - trial.get_progress()))]
+                [val for val in range(int(trial.iteration - trial.get_progress()))]
             )
 
         for bracket in hyper_band._brackets:
@@ -544,6 +556,12 @@ class TestHyperBand:
         resource = 10
         hyper_band.report_score(score, resource, trial.id)
         assert trial.score[resource] == score
+
+    def test_report_score_trial_done(self, hyper_band):
+        trial = hyper_band.get_next_sample()
+        hyper_band.report_score(100, 0.1, trial.id)
+        hyper_band.report_score(0, 0, trial.id, done=True)
+        assert trial.get_progress() == trial.iteration
 
     def test_is_done(self, hyper_band):
         for bracket in hyper_band._brackets:
@@ -595,3 +613,14 @@ class TestHyperBand:
         trial = hyper_band.get_next_sample()
         train_config = trial.get_train_configuration()
         assert "subset_ratio" in train_config["train_environment"]
+
+    def test_prior_hyper_parameters(self, good_hyperband_args):
+        prior1 = {"hp1" : 1, "hp2" : 2}
+        prior2 = {"hp1" : 100, "hp2" : 200}
+        good_hyperband_args["prior_hyper_parameters"] = [prior1, prior2]
+        hyper_band = HyperBand(**good_hyperband_args)
+        first_trial = hyper_band.get_next_sample()
+        second_trial = hyper_band.get_next_sample()
+
+        assert first_trial.configuration == prior1
+        assert second_trial.configuration == prior2

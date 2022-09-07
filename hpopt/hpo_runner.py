@@ -222,6 +222,7 @@ class HpoLoop:
                 report["score"],
                 report["progress"],
                 report["trial_id"],
+                report["done"]
             )
 
         self._hpo_algo.save_results()
@@ -247,15 +248,17 @@ def _report_score(
     score: Union[int, float],
     progress: Union[int, float],
     report_queue: Queue,
-    trial_id: Any
+    trial_id: Any,
+    done: bool = False
 ):
-    logger.debug(f"score : {score}, progress : {progress}, trial_id : {trial_id}, pid : {os.getpid()}")
+    logger.debug(f"score : {score}, progress : {progress}, trial_id : {trial_id}, pid : {os.getpid()}, done : {done}")
     report_queue.put_nowait(
         {
             "score" : score,
             "progress" : progress,
             "trial_id" : trial_id,
-            "pid" : os.getpid()
+            "pid" : os.getpid(),
+            "done" : done
         }
     )
 
