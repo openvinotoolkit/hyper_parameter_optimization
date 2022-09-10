@@ -3,12 +3,9 @@
 #
 
 import json
-import math
-import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
-import hpopt
 from hpopt.logger import get_logger
 from hpopt.search_space import SearchSpace
 from hpopt.utils import check_mode_input, check_positive

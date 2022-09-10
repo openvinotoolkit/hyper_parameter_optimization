@@ -68,23 +68,29 @@ class GPUResourceManager(ResourceManager):
 
     def _set_available_gpu(self, available_gpu: Optional[str] = None):
         if available_gpu is None:
-            if pynvml is None:
-                raise RuntimeError("If pynvml can't be imported, you should set availabe_gpu.")
-            pynvml.nvmlInit()
-            num_gpus = pynvml.nvmlDeviceGetCount()
-            pynvml.nvmlShutdown()
-            available_gpu = [val for val in range(num_gpus)]
+            if os.getenv("CUDA_VISIBLE_DEVICES") is not None:
+                available_gpu = self._transform_gpu_format_from_string_to_arr(os.getenv("CUDA_VISIBLE_DEVICES"))
+            else:
+                if pynvml is None:
+                    raise RuntimeError("If pynvml can't be imported, you should set availabe_gpu.")
+                pynvml.nvmlInit()
+                num_gpus = pynvml.nvmlDeviceGetCount()
+                pynvml.nvmlShutdown()
+                available_gpu = [val for val in range(num_gpus)]
         else:
-            for val in available_gpu.split(','):
-                if not val.isnumeric():
-                    raise ValueError(
-                        "available_gpu format is wrong. "
-                        "available_gpu should only have numbers delimited by ','.\n"
-                        f"your value is {available_gpu}"
-                    )
-            available_gpu = [int(val) for val in available_gpu.split(',')]
+            available_gpu = self._transform_gpu_format_from_string_to_arr(available_gpu)
 
         return available_gpu
+
+    def _transform_gpu_format_from_string_to_arr(self, gpu: str):
+        for val in gpu.split(','):
+            if not val.isnumeric():
+                raise ValueError(
+                    "gpu format is wrong. "
+                    "gpu should only have numbers delimited by ','.\n"
+                    f"your value is {gpu}"
+                )
+        return [int(val) for val in gpu.split(',')]
 
     def reserve_resource(self, trial_id):
         if not self.have_available_resource():

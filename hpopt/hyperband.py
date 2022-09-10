@@ -463,8 +463,8 @@ class HyperBand(HpoBase):
 
         if self.prior_hyper_parameters is not None:
             hp_configs.extend(self._get_prior_hyper_parameters(num, trial_id_prefix))
-
-        hp_configs.extend(self._get_random_hyper_parameter(num-len(hp_configs), trial_id_prefix))
+        if num - len(hp_configs) > 0:
+            hp_configs.extend(self._get_random_hyper_parameter(num-len(hp_configs), trial_id_prefix))
 
         return hp_configs
 
