@@ -224,6 +224,7 @@ class HpoLoop:
     def _get_reports(self):
         while not self._report_queue.empty():
             report = self._report_queue.get(timeout=3)
+            print("*"*100 , "in report", report)
             self._hpo_algo.report_score(
                 report["score"],
                 report["progress"],

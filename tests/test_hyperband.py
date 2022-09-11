@@ -39,6 +39,7 @@ def rung(good_rung_args):
 def good_bracket_args():
     hp_configs = [AshaTrial(i, {"hp1" : 1, "hp2" : 1.2}) for i in range(100)]
     return {
+        "id" : 0,
         "minimum_resource": 4,
         "maximum_resource": 64,
         "hyper_parameter_configurations" : hp_configs,
@@ -104,6 +105,15 @@ class TestAshaTrial:
     def test_set_negative_rung(self, trial, rung_val):
         with pytest.raises(ValueError):
             trial.rung = rung_val
+
+    @pytest.mark.parametrize("bracket_val", [0, 10])
+    def teste_set_bracket(self, trial, bracket_val):
+        trial.bracket = bracket_val
+
+    @pytest.mark.parametrize("bracket_val", [-10, -3])
+    def test_set_negative_bracket(self, trial, bracket_val):
+        with pytest.raises(ValueError):
+            trial.bracket = bracket_val
 
     def test_save_results(self, trial, tmp_path):
         rung_idx = 3
@@ -350,6 +360,7 @@ class TestBracket:
         new_trial = bracket._release_new_trial()
         assert len(bracket.hyper_parameter_configurations) == num_hyper_parameter_configurations - 1
         assert new_trial.id in bracket._trials
+        assert new_trial.bracket == bracket.id
 
     def test_promote_trial_if_available(self, bracket):
         self._make_all_first_rung_trials_done(bracket)
@@ -531,10 +542,9 @@ class TestHyperBand:
     @pytest.mark.parametrize("num", [1, 10])
     def test_make_new_hyper_parameter_configs(self, good_hyperband_args, num):
         hb = HyperBand(**good_hyperband_args)
-        trial_arr = hb._make_new_hyper_parameter_configs(num, "test")
+        trial_arr = hb._make_new_hyper_parameter_configs(num)
 
         for trial in trial_arr:
-            assert "test_" in trial.id
             assert 10 <= trial.configuration["hp1"] <= 100
             assert 100 <= trial.configuration["hp2"] <= 1000
             assert trial.configuration["hp2"] % 2 == 0
@@ -549,7 +559,7 @@ class TestHyperBand:
                 [val for val in range(int(trial.iteration - trial.get_progress()))]
             )
 
-        for bracket in hyper_band._brackets:
+        for bracket in hyper_band._brackets.values():
             assert bracket.is_done() == True
 
     def test_report_score(self, hyper_band):
@@ -566,7 +576,7 @@ class TestHyperBand:
         assert trial.get_progress() == trial.iteration
 
     def test_is_done(self, hyper_band):
-        for bracket in hyper_band._brackets:
+        for bracket in hyper_band._brackets.values():
             assert hyper_band.is_done() == False
             while True:
                 trial = bracket.get_next_trial()
@@ -583,7 +593,7 @@ class TestHyperBand:
     def test_get_best_config(self, hyper_band):
         max_score = 9999999
         first_trial = True
-        for bracket in hyper_band._brackets:
+        for bracket in hyper_band._brackets.values():
             assert hyper_band.is_done() == False
             while True:
                 trial = bracket.get_next_trial()
@@ -648,3 +658,29 @@ class TestHyperBand:
             )
 
         assert full_train_resource * expected_time_ratio * hyperband.acceptable_additional_time_ratio >= total_resource
+
+    def test_asynchronous_bracket(self, hyper_band):
+        bracket_id_arr = []
+        while True:
+            new_trial = hyper_band.get_next_sample()
+            if new_trial is None:
+                break
+
+            if new_trial.bracket not in bracket_id_arr:
+                bracket_id_arr.append(new_trial.bracket)
+
+        assert len(bracket_id_arr) > 1
+
+    def test_asynchronous_bracket(self, good_hyperband_args):
+        good_hyperband_args["asynchronous_bracket"] = False
+        hyper_band = HyperBand(**good_hyperband_args)
+        bracket_id_arr = []
+        while True:
+            new_trial = hyper_band.get_next_sample()
+            if new_trial is None:
+                break
+
+            if new_trial.bracket not in bracket_id_arr:
+                bracket_id_arr.append(new_trial.bracket)
+
+        assert len(bracket_id_arr) == 1

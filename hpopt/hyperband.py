@@ -34,15 +34,25 @@ class AshaTrial(Trial):
     ):
         super().__init__(id, configuration, train_environment)
         self._rung = 0
+        self._bracket = 0
 
     @property
     def rung(self):
         return self._rung
-
+        
     @rung.setter
     def rung(self, val: int):
         check_not_negative(val, "rung")
         self._rung = val
+
+    @property
+    def bracket(self):
+        return self._bracket
+
+    @bracket.setter
+    def bracket(self, val: int):
+        check_not_negative(val, "bracket")
+        self._bracket = val
 
     def save_results(self, save_path: str):
         results = {
@@ -161,6 +171,7 @@ class Rung:
 class Bracket:
     def __init__(
         self,
+        id: int,
         minimum_resource: Union[float, int],
         maximum_resource: Union[float, int],
         hyper_parameter_configurations: List[AshaTrial],
@@ -172,6 +183,7 @@ class Bracket:
         _check_reduction_factor_value(reduction_factor)
         check_mode_input(mode)
 
+        self._id = id
         self._minimum_resource = minimum_resource
         self.maximum_resource = maximum_resource
         self.hyper_parameter_configurations = hyper_parameter_configurations
@@ -198,6 +210,10 @@ class Bracket:
             ) for idx in range(self.max_rung + 1)
         ]
         self._trials: Dict[int, AshaTrial] = {}
+
+    @property
+    def id(self):
+        return self._id
 
     @property
     def maximum_resource(self):
@@ -252,6 +268,7 @@ class Bracket:
             return None
 
         new_trial = self.hyper_parameter_configurations.pop(0)
+        new_trial.bracket = self.id
         self._rungs[0].add_new_trial(new_trial)
         self._trials[new_trial.id] = new_trial
 
@@ -372,13 +389,13 @@ class HyperBand(HpoBase):
         self._minimum_resource = minimum_resource
         self._asynchronous_sha = asynchronous_sha
         self._asynchronous_bracket = asynchronous_bracket
+        self._trials: Dict[str, AshaTrial] = {}
 
         if self._need_to_auto_config():
             brackets_setting = self.auto_config()
         else:
             brackets_setting = self._make_default_brackets_setting()
-
-        self._brackets: List[Bracket] = self._make_brackets(brackets_setting)
+        self._brackets: Dict[str, Bracket] = self._make_brackets(brackets_setting)
 
     def _need_to_auto_config(self):
         """check full ASHA resource exceeds expected_time_ratio."""
@@ -431,12 +448,13 @@ class HyperBand(HpoBase):
         return brackets_setting
 
     def _make_brackets(self, brackets_setting: List[Dict]):
-        brackets = []
+        brackets = {}
         for bracket_setting in brackets_setting:
             idx = bracket_setting["bracket_index"]
             num_bracket_trials = bracket_setting["num_trials"]
-            configurations = self._make_new_hyper_parameter_configs(num_bracket_trials, str(idx))
+            configurations = self._make_new_hyper_parameter_configs(num_bracket_trials)
             bracket = Bracket(
+                idx,
                 self.maximum_resource * (self._reduction_factor ** -idx),
                 self.maximum_resource,
                 configurations,
@@ -444,55 +462,50 @@ class HyperBand(HpoBase):
                 self.mode,
                 self._asynchronous_sha
             )
-            brackets.append(bracket)
+            brackets[idx] = bracket
 
         return brackets
 
     def _make_new_hyper_parameter_configs(
         self,
         num: int,
-        trial_id_prefix: Optional[str] = None
     ):
         check_positive(num, "num")
 
-        if trial_id_prefix is not None:
-            trial_id_prefix = trial_id_prefix + "_"
-        else:
-            trial_id_prefix = ""
         hp_configs = []
 
         if self.prior_hyper_parameters is not None:
-            hp_configs.extend(self._get_prior_hyper_parameters(num, trial_id_prefix))
+            hp_configs.extend(self._get_prior_hyper_parameters(num))
         if num - len(hp_configs) > 0:
-            hp_configs.extend(self._get_random_hyper_parameter(num-len(hp_configs), trial_id_prefix))
+            hp_configs.extend(self._get_random_hyper_parameter(num-len(hp_configs)))
 
         return hp_configs
 
-    def _get_prior_hyper_parameters(self, num_samples: int, trial_id_prefix: str):
+    def _get_prior_hyper_parameters(self, num_samples: int):
         hp_configs = []
         num_samples = min([num_samples, len(self.prior_hyper_parameters)])
         for _ in range(num_samples):
             hyper_parameter = self.prior_hyper_parameters.pop(0)
-            hp_configs.append(self._make_trial(trial_id_prefix + self._get_new_trial_id(), hyper_parameter))
+            hp_configs.append(self._make_trial(hyper_parameter))
 
         return hp_configs
 
-    def _get_random_hyper_parameter(self, num_samples: int, trial_id_prefix: str):
+    def _get_random_hyper_parameter(self, num_samples: int):
         hp_configs = []
         configurations = latin_hypercube_sample(len(self.search_space), num_samples)
         for config in configurations:
             config_with_key = {key : config[idx] for idx, key in enumerate(self.search_space)}
             hp_configs.append(
-                self._make_trial(
-                    trial_id_prefix + self._get_new_trial_id(),
-                    self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key),
-                )
+                self._make_trial(self.search_space.convert_from_zero_one_scale_to_real_space(config_with_key))
             )
 
         return hp_configs
 
-    def _make_trial(self, id: str, hyper_parameter: Dict):
-        return AshaTrial(id, hyper_parameter, self._get_train_environment())
+    def _make_trial(self, hyper_parameter: Dict):
+        id = self._get_new_trial_id()
+        trial = AshaTrial(id, hyper_parameter, self._get_train_environment())
+        self._trials[id] = trial
+        return trial
 
     def _get_new_trial_id(self):
         id = self._next_trial_id
@@ -505,7 +518,7 @@ class HyperBand(HpoBase):
 
     def get_next_sample(self):
         next_sample = None
-        for bracket in self._brackets:
+        for bracket in self._brackets.values():
             if not bracket.is_done():
                 next_sample = bracket.get_next_trial()
                 if self._asynchronous_bracket and next_sample is None:
@@ -515,7 +528,7 @@ class HyperBand(HpoBase):
         return next_sample
 
     def save_results(self):
-        for idx, bracket in enumerate(self._brackets):
+        for idx, bracket in self._brackets.items():
             save_path = osp.join(self.save_path, str(idx))
             os.makedirs(save_path, exist_ok=True)
             bracket.save_results(save_path)
@@ -564,14 +577,14 @@ class HyperBand(HpoBase):
         raise NotImplementedError
 
     def report_score(self, score: Union[float, int], resource: Union[float, int], trial_id: str, done: bool = False):
-        bracket_idx = trial_id.split('_')[0]
+        bracket_idx = self._trials[trial_id].bracket
         if done:
-            self._brackets[int(bracket_idx)].report_trial_is_done(trial_id)
+            self._brackets[bracket_idx].report_trial_is_done(trial_id)
         else:
-            self._brackets[int(bracket_idx)].register_score(score, resource, trial_id)
+            self._brackets[bracket_idx].register_score(score, resource, trial_id)
 
     def is_done(self):
-        for bracket in self._brackets:
+        for bracket in self._brackets.values():
             if not bracket.is_done():
                 return False
         return True
@@ -580,7 +593,7 @@ class HyperBand(HpoBase):
         best_score = None
         best_trial = None
 
-        for bracket in self._brackets:
+        for bracket in self._brackets.values():
             trial = bracket.get_best_trial()
             if trial is None:
                 continue
