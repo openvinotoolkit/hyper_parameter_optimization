@@ -85,6 +85,7 @@ class Rung:
         self._resource = resource
         self._trials: List[AshaTrial] = []
         self._rung_idx = rung_idx
+        self._trials_to_rerun: List[AshaTrial] = []
 
     @property
     def num_required_trial(self):
@@ -132,7 +133,7 @@ class Rung:
         if self.need_more_trials():
             return False
         for trial in self._trials:
-            if not self.trial_is_done(trial):
+            if not trial.is_done():
                 return False
         return True
 
@@ -144,7 +145,7 @@ class Rung:
 
         for trial in self._trials:
             if trial.rung == self._rung_idx:
-                if self.trial_is_done(trial):
+                if trial.is_done():
                     num_finished_trial += 1
                     trial_score = trial.get_best_score(mode, self.resource)
                     if best_score is None or left_is_better(trial_score, best_score, mode):
@@ -165,8 +166,23 @@ class Rung:
 
         return None
 
-    def trial_is_done(self, trial: AshaTrial):
-        return trial.get_progress() >= self.resource
+    def report_trial_exit_abnormally(self, trial_id: Any):
+        trial_to_rerun = None
+        for trial in self._trials:
+            if trial_id == trial.id:
+                trial_to_rerun = trial
+        if trial_to_rerun is None:
+            raise ValueError(f"trial whose id is {trial_id} is not in this rung.")
+
+        if trial_to_rerun.is_done():
+            logger.info(f"{trial_id} trial is reported that it exists abnormally, but it's done.")
+        else:
+            self._trials_to_rerun.append(trial_to_rerun)
+
+    def get_trial_to_rerun(self):
+        if not self._trials_to_rerun:
+            return None
+        return self._trials_to_rerun.pop(0)
 
 class Bracket:
     def __init__(
@@ -286,13 +302,15 @@ class Bracket:
 
         return best_trial
 
-    def register_score(self, score: Union[float, int], resource: Union[float, int], trial_id: Any):
-        self._trials[trial_id].register_score(score, resource)
-
     def get_next_trial(self):
-        next_sample = None
+        next_sample = self._rungs[self.max_rung].get_trial_to_rerun()
+        if next_sample is not None:
+            return next_sample
+
         for current_rung in range(self.max_rung-1, -1, -1):
             next_sample = self._promote_trial_if_available(current_rung)
+            if next_sample is None:
+                next_sample = self._rungs[current_rung].get_trial_to_rerun()
             if next_sample is not None:
                 break
 
@@ -365,13 +383,9 @@ class Bracket:
             ]
         }
 
-    def report_trial_is_done(self, trial_id: Any):
+    def report_trial_exit_abnormally(self, trial_id: Any):
         trial = self._trials[trial_id]
-        if trial.get_progress() < trial.iteration:
-            best_score = trial.get_best_score()
-            if best_score is None:
-                raise RuntimeError(f"Although {trial_id} trial doesn't report any score but it's done")
-            self.register_score(best_score, trial.iteration, trial_id)
+        self._rungs[trial.rung].report_trial_exit_abnormally(trial_id)
 
 class HyperBand(HpoBase):
     """
@@ -601,11 +615,10 @@ class HyperBand(HpoBase):
         raise NotImplementedError
 
     def report_score(self, score: Union[float, int], resource: Union[float, int], trial_id: str, done: bool = False):
-        bracket_idx = self._trials[trial_id].bracket
         if done:
-            self._brackets[bracket_idx].report_trial_is_done(trial_id)
+            self._trials[trial_id].finalize()
         else:
-            self._brackets[bracket_idx].register_score(score, resource, trial_id)
+            self._trials[trial_id].register_score(score, resource)
 
     def is_done(self):
         for bracket in self._brackets.values():
@@ -640,3 +653,7 @@ class HyperBand(HpoBase):
         )
         for bracket in self._brackets.values():
             bracket.print_result()
+
+    def report_trial_exit_abnormally(self, trial_id: Any):
+        bracket_idx = self._trials[trial_id].bracket
+        self._brackets[bracket_idx].report_trial_exit_abnormally(trial_id)

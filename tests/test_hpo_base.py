@@ -112,3 +112,27 @@ class TestTrial:
         assert result["train_environment"]["subset_ratio"] == 0.5
         for key, val in result["score"].items():
             assert int(key)-1 == val
+
+    def test_finalize(self, trial):
+        trial.iteration = 10
+        trial.register_score(10, 5)
+        trial.finalize()
+        assert trial.iteration == trial.get_progress()
+
+    def test_finalize_without_registered_score(self, trial):
+        trial.iteration = 10
+        with pytest.raises(RuntimeError):
+            trial.finalize()
+
+    def test_is_not_done(self, trial):
+        trial.iteration = 10
+        assert trial.is_done() == False
+
+    def test_is_done(self, trial):
+        trial.iteration = 10
+        trial.register_score(10, 10)
+        assert trial.is_done() == True
+
+    def test_is_done_iteration_not_set_yet(self, trial):
+        with pytest.raises(ValueError):
+            trial.is_done()

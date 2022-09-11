@@ -284,14 +284,26 @@ class TestRung:
             best_trial.rung += 1
             assert rung.get_trial_to_promote(True) is None
 
-    def test_trial_is_done(self, rung, trial):
-        register_scores_to_trial(trial, [val for val in range(rung.resource-1)])
-        assert rung.trial_is_done(trial) == False
-        trial.register_score(100, rung.resource)
-        assert rung.trial_is_done(trial) == True
+    def test_report_trial_exit_abnormally(self, rung, trial):
+        rung.add_new_trial(trial)
+        rung.report_trial_exit_abnormally(trial.id)
+        new_trial = rung.get_trial_to_rerun()
+        assert trial.id == new_trial.id
 
-    def test_trial_is_done_trial_not_trained_at_all(self, rung, trial):
-        assert rung.trial_is_done(trial) == False
+    def test_report_trial_exit_abnormally_with_wrong_trial_id(self, rung):
+        with pytest.raises(ValueError):
+            rung.report_trial_exit_abnormally("wrong_trial_id")
+
+    def test_report_trial_exit_abnormally_but_it_is_done(self, rung, trial):
+        rung.add_new_trial(trial)
+        register_scores_to_trial(trial, [i for i in range(ceil(rung.resource))])
+        rung.report_trial_exit_abnormally(trial.id)
+        new_trial = rung.get_trial_to_rerun()
+        assert new_trial is None
+
+    def test_get_trial_to_rerun_with_empty_rerun_arr(self, rung):
+        new_trial = rung.get_trial_to_rerun()
+        assert new_trial is None
 
 class TestBracket:
     def test_init(self, good_bracket_args):
@@ -391,18 +403,6 @@ class TestBracket:
     def test_promote_trial_if_available_negative_rung_idx(self, bracket):
         with pytest.raises(ValueError):
             bracket._promote_trial_if_available(-1)
-
-    def test_register_score(self, bracket):
-        new_trial = bracket._release_new_trial()
-        registered_score = 100
-
-        bracket.register_score(registered_score, 1, new_trial.id)
-        assert new_trial.score[1] == registered_score
-
-    def test_register_score_wrong_id(self, bracket):
-        score = 100
-        with pytest.raises((ValueError, KeyError)):
-            bracket.register_score(score, 1, "wrong_name")
 
     def test_get_next_trial(self, bracket):
         rung_idx = 0
@@ -525,17 +525,11 @@ class TestBracket:
     def test_print_result_without_train(self, bracket):
         bracket.print_result()
 
-    def test_report_trial_is_done(self, bracket):
+    def test_report_trial_exit_abnormally(self, bracket):
         trial = bracket.get_next_trial()
-        score = 10
-        bracket.register_score(score, trial.iteration-1, trial.id)
-        bracket.report_trial_is_done(trial.id)
-        assert trial.get_progress() == trial.iteration
-
-    def test_report_trial_is_done_without_reporting(self, bracket):
-        trial = bracket.get_next_trial()
-        with pytest.raises(RuntimeError):
-            bracket.report_trial_is_done(trial.id)
+        bracket.report_trial_exit_abnormally(trial.id)
+        new_trial = bracket.get_next_trial()
+        assert trial.id == new_trial.id
 
 class TestHyperBand:
     def test_init(self, good_hyperband_args):
@@ -717,3 +711,9 @@ class TestHyperBand:
 
     def test_print_result_without_train(self, hyper_band):
         hyper_band.print_result()
+
+    def test_report_trial_exit_abnormally(self,hyper_band):
+        trial = hyper_band.get_next_sample()
+        hyper_band.report_trial_exit_abnormally(trial.id)
+        new_trial = hyper_band.get_next_sample()
+        assert trial.id == new_trial.id

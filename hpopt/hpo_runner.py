@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import queue
 from abc import ABC, abstractmethod
 from functools import partial
 from multiprocessing import Process, Queue
@@ -164,7 +165,7 @@ class HpoLoop:
     ):
         self._hpo_algo = hpo_algo
         self._train_func = train_func
-        self._running_trials: Dict[int, Process] = {}
+        self._running_trials: Dict[int, Dict[str, Union[Trial, Process]]] = {}
         self._mp = multiprocessing.get_context("spawn")
         self._report_queue = self._mp.Queue()
         self._uid_index = 0
@@ -207,24 +208,30 @@ class HpoLoop:
                 env
             )
         )
-        self._running_trials[uid] = process
+        self._running_trials[uid] = {"process" : process, "trial" : trial}
         process.start()
 
     def _remove_finished_process(self):
         trial_to_remove = []
-        for uid, process in self._running_trials.items():
+        for uid, val in self._running_trials.items():
+            process = val["process"]
             if not process.is_alive():
                 process.join()
                 trial_to_remove.append(uid)
 
         for uid in trial_to_remove:
+            trial = self._running_trials[uid]["trial"]
+            if not trial.is_done():
+                self._hpo_algo.report_trial_exit_abnormally(trial.id)
             self._resource_manager.release_resource(uid)
             del self._running_trials[uid]
 
     def _get_reports(self):
-        while not self._report_queue.empty():
-            report = self._report_queue.get(timeout=3)
-            print("*"*100 , "in report", report)
+        while True:
+            try:
+                report = self._report_queue.get(timeout=1)
+            except queue.Empty:
+                break
             self._hpo_algo.report_score(
                 report["score"],
                 report["progress"],
@@ -235,8 +242,9 @@ class HpoLoop:
         self._hpo_algo.save_results()
     
     def _join_all_processes(self):
-        for p in self._running_trials.values():
-            p.join()
+        for val in self._running_trials.values():
+            process = val["process"]
+            process.join()
 
         self._running_trials = {}
 

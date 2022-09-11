@@ -162,6 +162,10 @@ class HpoBase(ABC):
     def print_result(self):
         raise NotImplementedError
 
+    @abstractmethod
+    def report_trial_exit_abnormally(self, trial_id: Any):
+        raise NotImplementedError
+
 class Trial:
     def __init__(
         self,
@@ -239,3 +243,15 @@ class Trial:
 
         with open(save_path, "w") as f:
             json.dump(results, f)
+
+    def finalize(self):
+        if self.get_progress() < self.iteration:
+            best_score = self.get_best_score()
+            if best_score is None:
+                raise RuntimeError(f"Although {self.id} trial doesn't report any score but it's done")
+            self.register_score(best_score, self.iteration)
+
+    def is_done(self):
+        if self.iteration is None:
+            raise ValueError("iteration isn't set yet.")
+        return self.get_progress() >= self.iteration
