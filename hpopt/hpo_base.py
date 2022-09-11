@@ -158,6 +158,10 @@ class HpoBase(ABC):
     def get_best_config(self):
         raise NotImplementedError
 
+    @abstractmethod
+    def print_result(self):
+        raise NotImplementedError
+
 class Trial:
     def __init__(
         self,

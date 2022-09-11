@@ -318,7 +318,36 @@ class Bracket:
         return trial
 
     def save_results(self, save_path: str):
-        result = {
+        result = self._get_result()
+        with open(osp.join(save_path, "rung_status.json"), "w") as f:
+            json.dump(result, f)
+
+        for trial_id, trial in self._trials.items():
+            trial.save_results(osp.join(save_path, f"{trial_id}.json"))
+
+    def print_result(self):
+        print("*"*20, f"{self.id} bracket", "*"*20)
+        result = self._get_result()
+        del result["rung_status"]
+        for key, val in result.items():
+            print(f"{key} : {val}")
+
+        best_trial = self.get_best_trial()
+        if best_trial is None:
+            print("This bracket isn't started yet!\n")
+            return
+        print(
+            f"best trial:\n"
+            f"id : {best_trial.id} / score : {best_trial.get_best_score()} / config : {best_trial.configuration}"
+        )
+
+        print("all trials:")
+        for trial in self._trials.values():
+            print(f"id : {trial.id} / score : {trial.get_best_score()} / config : {trial.configuration}")
+        print()
+
+    def _get_result(self):
+        return {
             "minimum_resource" : self._minimum_resource,
             "maximum_resource" : self.maximum_resource,
             "reduction_factor" : self._reduction_factor,
@@ -335,11 +364,6 @@ class Bracket:
                 } for rung in self._rungs
             ]
         }
-        with open(osp.join(save_path, "rung_status.json"), "w") as f:
-            json.dump(result, f)
-
-        for trial_id, trial in self._trials.items():
-            trial.save_results(osp.join(save_path, f"{trial_id}.json"))
 
     def report_trial_is_done(self, trial_id: Any):
         trial = self._trials[trial_id]
@@ -606,3 +630,13 @@ class HyperBand(HpoBase):
         if best_trial is None:
             return None
         return best_trial.configuration
+
+    def print_result(self):
+        print(
+            "HPO(ASHA) result summary\n"
+            f"Best config : {self.get_best_config()}.\n"
+            f"Hyper band runs {len(self._brackets)} brackets.\n"
+            "Brackets summary:"
+        )
+        for bracket in self._brackets.values():
+            bracket.print_result()

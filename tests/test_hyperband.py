@@ -509,6 +509,22 @@ class TestBracket:
         for i in range(trial_num):
             assert osp.exists(osp.join(tmp_path, f"{i}.json")) == True
 
+    def test_print_result(self, bracket):
+        while True:
+            trial = bracket.get_next_trial()
+            if trial is None:
+                break
+
+            register_scores_to_trial(
+                trial,
+                [score for score in range(bracket._rungs[trial.rung].resource - trial.get_progress())]
+            )
+
+        bracket.print_result()
+
+    def test_print_result_without_train(self, bracket):
+        bracket.print_result()
+
     def test_report_trial_is_done(self, bracket):
         trial = bracket.get_next_trial()
         score = 10
@@ -684,3 +700,20 @@ class TestHyperBand:
                 bracket_id_arr.append(new_trial.bracket)
 
         assert len(bracket_id_arr) == 1
+
+    def test_print_result(self, hyper_band):
+        while not hyper_band.is_done():
+            trial = hyper_band.get_next_sample()
+            if trial is None:
+                break
+
+            resource = ceil(trial.iteration - trial.get_progress())
+            register_scores_to_trial(
+                trial,
+                [score for score in range(resource)]
+            )
+
+        hyper_band.print_result()
+
+    def test_print_result_without_train(self, hyper_band):
+        hyper_band.print_result()
