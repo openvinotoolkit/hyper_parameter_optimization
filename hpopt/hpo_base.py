@@ -64,7 +64,7 @@ class HpoBase(ABC):
         verbose: int = 0,
         resume: bool = False,
         prior_hyper_parameters: Optional[Union[Dict, List[Dict]]] = None,
-        acceptable_additional_time_ratio: Union[float, int] = 1.2
+        acceptable_additional_time_ratio: Union[float, int] = 1.0
     ):
         check_mode_input(mode)
         check_positive(full_dataset_size, "full_dataset_size")

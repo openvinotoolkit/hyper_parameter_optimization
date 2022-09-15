@@ -485,29 +485,32 @@ class HyperBand(HpoBase):
 
         return brackets_setting
 
-    def _make_brackets(self, brackets_setting: List[Dict]):
+    def _make_brackets(self, brackets_settings: List[Dict]):
         brackets = {}
-        for bracket_setting in brackets_setting:
-            idx = bracket_setting["bracket_index"]
+        total_num_trials = 0
+        for bracket_setting in brackets_settings:
+            total_num_trials += bracket_setting["num_trials"]
+        configurations = self._make_new_hyper_parameter_configs(total_num_trials)
+
+        for bracket_setting in brackets_settings:
+            bracket_idx = bracket_setting["bracket_index"]
             num_bracket_trials = bracket_setting["num_trials"]
-            configurations = self._make_new_hyper_parameter_configs(num_bracket_trials)
+            bracket_configurations = configurations[:num_bracket_trials]
+            configurations = configurations[num_bracket_trials:]
             bracket = Bracket(
-                idx,
-                self.maximum_resource * (self._reduction_factor ** -idx),
+                bracket_idx,
+                self.maximum_resource * (self._reduction_factor ** -bracket_idx),
                 self.maximum_resource,
-                configurations,
+                bracket_configurations,
                 self._reduction_factor,
                 self.mode,
                 self._asynchronous_sha
             )
-            brackets[idx] = bracket
+            brackets[bracket_idx] = bracket
 
         return brackets
 
-    def _make_new_hyper_parameter_configs(
-        self,
-        num: int,
-    ):
+    def _make_new_hyper_parameter_configs(self, num: int,):
         check_positive(num, "num")
 
         hp_configs = []
@@ -578,7 +581,11 @@ class HyperBand(HpoBase):
         can be reduced. if not, skip that bracket and check that next bracket can be added by same method.
         """
         brackets_setting = []
-        resource_upper_bound = self.maximum_resource * self.expected_time_ratio * self.acceptable_additional_time_ratio
+        resource_upper_bound = (
+            self.maximum_resource
+            * self.expected_time_ratio
+            * self.acceptable_additional_time_ratio
+        )
 
         total_resource = 0
         for idx in range(self._calculate_s_max(), -1, -1):
