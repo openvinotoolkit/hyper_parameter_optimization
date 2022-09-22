@@ -3,10 +3,10 @@ import os
 import queue
 from abc import ABC, abstractmethod
 from functools import partial
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from typing import Any, Callable, Dict, Optional, Union
 
-from hpopt.hpo_base import HpoBase, Trial
+from hpopt.hpo_base import HpoBase, Trial, TrialStatus
 from hpopt.logger import get_logger
 from hpopt.utils import check_positive
 
@@ -167,7 +167,6 @@ class HpoLoop:
         self._train_func = train_func
         self._running_trials: Dict[int, Dict[str, Union[Trial, Process]]] = {}
         self._mp = multiprocessing.get_context("spawn")
-        self._report_queue = self._mp.Queue()
         self._uid_index = 0
         self._resource_manager = get_resource_manager(
             resource_type,
@@ -197,18 +196,20 @@ class HpoLoop:
         logger.info(f"{trial.id} trial is now running.")
         logger.debug(f"{trial.id} hyper paramter => {trial.configuration}")
         
+        trial.status = TrialStatus.RUNNING
         uid = self._get_uid()
         env = self._resource_manager.reserve_resource(uid)
+        pipe1, pipe2 = self._mp.Pipe(True)
         process = self._mp.Process(
             target=_run_train,
             args=(
                 self._train_func,
                 trial.get_train_configuration(),
-                partial(_report_score, report_queue=self._report_queue, trial_id=trial.id),
+                partial(_report_score, pipe=pipe2, trial_id=trial.id),
                 env
             )
         )
-        self._running_trials[uid] = {"process" : process, "trial" : trial}
+        self._running_trials[uid] = {"process" : process, "trial" : trial, "pipe" : pipe1}
         process.start()
 
     def _remove_finished_process(self):
@@ -221,23 +222,25 @@ class HpoLoop:
 
         for uid in trial_to_remove:
             trial = self._running_trials[uid]["trial"]
-            if not trial.is_done():
-                self._hpo_algo.report_trial_exit_abnormally(trial.id)
+            trial.status = TrialStatus.STOP
             self._resource_manager.release_resource(uid)
             del self._running_trials[uid]
 
     def _get_reports(self):
-        while True:
-            try:
-                report = self._report_queue.get(timeout=1)
-            except queue.Empty:
-                break
-            self._hpo_algo.report_score(
-                report["score"],
-                report["progress"],
-                report["trial_id"],
-                report["done"]
-            )
+        for trial in self._running_trials.values():
+            pipe = trial["pipe"]
+            if pipe.poll():
+                try:
+                    report = pipe.recv()
+                except EOFError:
+                    continue
+                trial_status = self._hpo_algo.report_score(
+                    report["score"],
+                    report["progress"],
+                    report["trial_id"],
+                    report["done"]
+                )
+                pipe.send(trial_status)
 
         self._hpo_algo.save_results()
     
@@ -262,12 +265,12 @@ def _run_train(train_func: Callable, hp_config: Dict, report_func: Callable, env
 def _report_score(
     score: Union[int, float],
     progress: Union[int, float],
-    report_queue: Queue,
+    pipe,
     trial_id: Any,
     done: bool = False
 ):
     logger.debug(f"score : {score}, progress : {progress}, trial_id : {trial_id}, pid : {os.getpid()}, done : {done}")
-    report_queue.put_nowait(
+    pipe.send(
         {
             "score" : score,
             "progress" : progress,
@@ -276,6 +279,9 @@ def _report_score(
             "done" : done
         }
     )
+    trial_status = pipe.recv()
+    logger.debug(f"trial_status : {trial_status}")
+    return trial_status
 
 def run_hpo_loop(
     hpo_algo: HpoBase,

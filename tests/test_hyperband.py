@@ -10,6 +10,7 @@ from os import path as osp
 import pytest
 from hpopt import hyperband
 from hpopt.hyperband import AshaTrial, Rung, Bracket, HyperBand
+from hpopt.hpo_base import TrialStatus
 
 @pytest.fixture
 def good_trial_args():
@@ -72,7 +73,7 @@ def good_hyperband_args():
         "save_path" : "/tmp/hpopt",
         "mode" : "max",
         "num_workers" : 1,
-        "num_full_iterations" : 1,
+        "num_full_iterations" : 1000,
         "non_pure_train_ratio" : 0.2,
         "full_dataset_size" : 100,
         "metric" : "mAP",
@@ -168,7 +169,9 @@ class TestRung:
         for _ in range(rung.num_required_trial):
             trial = AshaTrial(**good_trial_args)
             rung.add_new_trial(trial)
-            assert rung._trials[-1] == trial
+            assert trial.rung == rung.rung_idx
+            assert trial.iteration == rung.resource
+            assert trial.status == TrialStatus.READY
 
     def test_add_too_many_trials(self, rung, good_trial_args):
         with pytest.raises(RuntimeError):
@@ -180,8 +183,8 @@ class TestRung:
     def test_get_best_trial(self, rung, good_trial_args, mode):
         for score in range(rung.num_required_trial):
             trial = AshaTrial(**good_trial_args)
-            trial.register_score(score=score, resource=1)
             rung.add_new_trial(trial)
+            trial.register_score(score=score, resource=trial.iteration)
 
         best_trial = rung.get_best_trial(mode)
 
@@ -193,14 +196,27 @@ class TestRung:
     def test_get_best_trial_with_not_started_trial(self, rung, good_trial_args):
         for score in range(rung.num_required_trial-1):
             trial = AshaTrial(**good_trial_args)
-            trial.register_score(score=score, resource=1)
             rung.add_new_trial(trial)
+            trial.register_score(score=score, resource=trial.iteration)
 
         trial = AshaTrial(**good_trial_args)
         rung.add_new_trial(trial)
         best_trial = rung.get_best_trial()
 
         assert  best_trial.get_best_score() == rung.num_required_trial - 2
+
+    def test_get_best_trial_when_best_trial_is_undone(self, rung, good_trial_args):
+        for _ in range(rung.num_required_trial-1):
+            trial = AshaTrial(**good_trial_args)
+            rung.add_new_trial(trial)
+            trial.register_score(score=1, resource=trial.iteration)
+
+        trial = AshaTrial(**good_trial_args)
+        rung.add_new_trial(trial)
+        trial.register_score(score=100, resource=1)
+        best_trial = rung.get_best_trial()
+
+        assert  best_trial.get_best_score() == 100
 
     def test_get_best_trial_with_no_trial(self, rung):
         best_trial = rung.get_best_trial()
@@ -218,11 +234,11 @@ class TestRung:
 
         assert rung.need_more_trials() == False
 
-    def test_get_num_trials_started(self, rung, good_trial_args):
+    def test_get_num_trials(self, rung, good_trial_args):
         for idx in range(rung.num_required_trial):
             trial = AshaTrial(**good_trial_args)
             rung.add_new_trial(trial)
-            assert rung.get_num_trials_started() == idx+1
+            assert rung.get_num_trials() == idx+1
 
     def test_need_more_trails(self, rung, good_trial_args):
         for i in range(1, rung.num_required_trial+1):
@@ -284,26 +300,47 @@ class TestRung:
             best_trial.rung += 1
             assert rung.get_trial_to_promote(True) is None
 
-    def test_report_trial_exit_abnormally(self, rung, trial):
+    def test_get_trial_to_promote_not_running(self, rung, good_trial_args):
+        for i in range(rung.num_required_trial):
+            trial = AshaTrial(**good_trial_args)
+            rung.add_new_trial(trial)
+
+        for i in range(rung.num_required_trial):
+            trial = rung.get_next_trial()
+            register_scores_to_trial(trial, [val for val in range(rung.resource)])
+            trial.status = TrialStatus.RUNNING
+
+        promoted_trial = rung.get_trial_to_promote()
+        assert promoted_trial == None
+
+        trial.status = TrialStatus.STOP
+        promoted_trial = rung.get_trial_to_promote()
+        assert promoted_trial.status != TrialStatus.RUNNING
+        
+
+    def test_get_next_trial(self, rung, good_trial_args):
+        trial = AshaTrial(**good_trial_args)
         rung.add_new_trial(trial)
-        rung.report_trial_exit_abnormally(trial.id)
-        new_trial = rung.get_trial_to_rerun()
-        assert trial.id == new_trial.id
 
-    def test_report_trial_exit_abnormally_with_wrong_trial_id(self, rung):
-        with pytest.raises(ValueError):
-            rung.report_trial_exit_abnormally("wrong_trial_id")
+        new_trial = rung.get_next_trial()
+        assert trial == new_trial
+        trial.status = TrialStatus.RUNNING
 
-    def test_report_trial_exit_abnormally_but_it_is_done(self, rung, trial):
+        # running trial isn't provided
+        new_trial = rung.get_next_trial()
+        assert new_trial == None
+
+        # finished trial isn't provided
+        register_scores_to_trial(trial, [i for i in range(trial.iteration)])
+        trial.status = TrialStatus.STOP
+        new_trial = rung.get_next_trial()
+        assert new_trial == None
+
+    def test_get_next_trial_stopped_in_progress(self, rung, trial):
         rung.add_new_trial(trial)
-        register_scores_to_trial(trial, [i for i in range(ceil(rung.resource))])
-        rung.report_trial_exit_abnormally(trial.id)
-        new_trial = rung.get_trial_to_rerun()
-        assert new_trial is None
-
-    def test_get_trial_to_rerun_with_empty_rerun_arr(self, rung):
-        new_trial = rung.get_trial_to_rerun()
-        assert new_trial is None
+        register_scores_to_trial(trial, [i for i in range(trial.iteration - 1)])
+        undone_trial = rung.get_next_trial()
+        assert trial == undone_trial
 
 class TestBracket:
     def test_init(self, good_bracket_args):
@@ -351,7 +388,7 @@ class TestBracket:
         )
         assert bracket.max_rung == expected_val
 
-    def test_calcuate_max_rung(self):
+    def test_calcuate_max_rung_idx(self):
         minimum_resource = 1
         maximum_resource = 100
         reduction_factor = 3
@@ -368,61 +405,68 @@ class TestBracket:
             Bracket.calcuate_max_rung_idx(minimum_resource, maximum_resource, reduction_factor)
 
     def test_release_new_trial(self, bracket):
-        num_hyper_parameter_configurations = len(bracket.hyper_parameter_configurations)
-        new_trial = bracket._release_new_trial()
-        assert len(bracket.hyper_parameter_configurations) == num_hyper_parameter_configurations - 1
-        assert new_trial.id in bracket._trials
-        assert new_trial.bracket == bracket.id
+        while True:
+            new_trial = bracket.get_next_trial()
+            if new_trial is None:
+                break
+            new_trial.status = TrialStatus.RUNNING
+            assert new_trial.bracket == bracket.id
+            assert new_trial.rung == 0
 
-    def test_promote_trial_if_available(self, bracket):
-        self._make_all_first_rung_trials_done(bracket)
+    def test_promote_trial_if_available_asha(self, good_bracket_args):
+        reduction_factor = good_bracket_args["reduction_factor"]
+        bracket = Bracket(**good_bracket_args)
+        for _ in range(reduction_factor):
+            trial = bracket.get_next_trial()
+            assert trial.rung == 0
+            trial.register_score(score=0, resource=trial.iteration)
 
-        rung_idx = 0
-        while rung_idx < bracket.max_rung:
-            trial_to_promote = bracket._rungs[rung_idx].get_trial_to_promote(mode=bracket._mode)
-            if  trial_to_promote is not None:
-                trial = bracket._promote_trial_if_available(rung_idx)
-                assert trial == trial_to_promote # If promotable trials exists and not in max_rung, should return trials
-                for idx in range(bracket._rungs[rung_idx+1].resource - bracket._rungs[rung_idx].resource):
-                    trial.register_score(idx, bracket._rungs[rung_idx].resource + idx + 1)
-            elif bracket._rungs[rung_idx].is_done():
-                trial = bracket._promote_trial_if_available(rung_idx)
-                assert trial is None # if promotable trials doesn't exist, return None
+        trial = bracket.get_next_trial()
+        assert trial.rung == 1
 
-                rung_idx += 1
-                print(bracket.max_rung, "/", rung_idx)
+    def test_promote_trial_if_available_sha(self, good_bracket_args):
+        good_bracket_args["asynchronous_sha"] = False
+        bracket = Bracket(**good_bracket_args)
+        trial_arr = []
+        while True:
+            trial = bracket.get_next_trial()
+            if trial is None:
+                break
 
-        trial = bracket._promote_trial_if_available(rung_idx)
-        assert trial is None # if rung_idx is max_rung, return None
+            assert trial.rung == 0
+            trial.status = TrialStatus.RUNNING
+            trial_arr.append(trial)
 
-    def _make_all_first_rung_trials_done(self, bracket):
-        for _ in range(bracket._rungs[0]._num_required_trial):
-            new_trial = bracket._release_new_trial()
-            register_scores_to_trial(new_trial, [score for score in range(bracket._rungs[0].resource)])
-
-    def test_promote_trial_if_available_negative_rung_idx(self, bracket):
-        with pytest.raises(ValueError):
-            bracket._promote_trial_if_available(-1)
+        for trial in trial_arr:
+            trial.register_score(score=1, resource=trial.iteration)
+            trial.status = TrialStatus.READY
+        
+        trial = bracket.get_next_trial()
+        assert trial.rung == 1
 
     def test_get_next_trial(self, bracket):
-        rung_idx = 0
-        while rung_idx <= bracket.max_rung:
-            trial_arr = []
-            for _ in range(bracket._rungs[rung_idx]._num_required_trial):
-                trial = bracket.get_next_trial()
-                assert trial != None
-                trial_arr.append(trial)
-
+        while not bracket.is_done():
             trial = bracket.get_next_trial()
-            assert trial == None
+            assert trial != None
 
-            for trial in trial_arr:
-                register_scores_to_trial(
-                    trial,
-                    [score for score in range(bracket._rungs[rung_idx].resource - trial.get_progress())]
-                )
+            trial.status = TrialStatus.RUNNING
+            trial.register_score(0, trial.iteration)
+            trial.status = TrialStatus.STOP
+        
+        assert bracket.is_done()
 
-            rung_idx += 1
+    def test_get_next_trial_if_trial_is_always_running(self, bracket):
+        trial_arr = []
+        while True:
+            trial = bracket.get_next_trial()
+            if trial is None:
+                break
+
+            trial.status = TrialStatus.RUNNING
+            trial_arr.append(trial)
+
+        for trial in trial_arr:
+            trial.register_score(0, trial.iteration)
 
         trial = bracket.get_next_trial()
         assert trial == None
@@ -433,10 +477,7 @@ class TestBracket:
             if trial is None:
                 break
 
-            register_scores_to_trial(
-                trial,
-                [score for score in range(bracket._rungs[trial.rung].resource - trial.get_progress())]
-            )
+            trial.register_score(score=0, resource=trial.iteration)
 
         assert bracket.is_done() == True
 
@@ -505,7 +546,7 @@ class TestBracket:
         assert result["num_trials"] == trial_num
         assert len(result["rung_status"]) == bracket.max_rung + 1
         for rung_status in result["rung_status"]:
-            assert rung_status["num_trial_started"] == rung_status["num_required_trial"]
+            assert rung_status["num_trial"] == rung_status["num_required_trial"]
         for i in range(trial_num):
             assert osp.exists(osp.join(tmp_path, f"{i}.json")) == True
 
@@ -527,7 +568,7 @@ class TestBracket:
 
     def test_report_trial_exit_abnormally(self, bracket):
         trial = bracket.get_next_trial()
-        bracket.report_trial_exit_abnormally(trial.id)
+        trial.register_score(score=0, resource=trial.iteration-0.1)
         new_trial = bracket.get_next_trial()
         assert trial.id == new_trial.id
 
@@ -543,18 +584,34 @@ class TestHyperBand:
             HyperBand(**wrong_arg)
 
     @pytest.mark.parametrize("reduction_factor", [-10, 0, 1])
-    def test_init_wrong_reduction_factor(selfe, good_hyperband_args, reduction_factor):
+    def test_init_wrong_reduction_factor(self, good_hyperband_args, reduction_factor):
         wrong_arg = good_hyperband_args
         wrong_arg["reduction_factor"] = reduction_factor
         with pytest.raises(ValueError):
             HyperBand(**wrong_arg)
 
+    def test_init_maximum_is_same_with_minimum(self, good_hyperband_args):
+        good_hyperband_args["maximum_resource"] = good_hyperband_args["minimum_resource"]
+        hyper_band = HyperBand(**good_hyperband_args)
+
+    def test_init_no_minimum_resource(self, good_hyperband_args):
+        del good_hyperband_args["minimum_resource"]
+        hyper_band  = HyperBand(**good_hyperband_args)
+
+    def test_init_no_maximum_resource(self, good_hyperband_args):
+        del good_hyperband_args["maximum_resource"]
+        hyper_band  = HyperBand(**good_hyperband_args)
+
     @pytest.mark.parametrize("num", [1, 10])
     def test_make_new_hyper_parameter_configs(self, good_hyperband_args, num):
         hb = HyperBand(**good_hyperband_args)
-        trial_arr = hb._make_new_hyper_parameter_configs(num)
+        
+        while True:
+            trial = hb.get_next_sample()
+            if trial is None:
+                break
+            trial.status = TrialStatus.RUNNING
 
-        for trial in trial_arr:
             assert 10 <= trial.configuration["hp1"] <= 100
             assert 100 <= trial.configuration["hp2"] <= 1000
             assert trial.configuration["hp2"] % 2 == 0
@@ -569,8 +626,16 @@ class TestHyperBand:
                 [val for val in range(int(trial.iteration - trial.get_progress()))]
             )
 
-        for bracket in hyper_band._brackets.values():
-            assert bracket.is_done() == True
+        assert hyper_band.is_done()
+
+    def test_get_next_sample_without_train(self, hyper_band):
+        while True:
+            trial = hyper_band.get_next_sample()
+            if trial is None:
+                break
+            trial.status = TrialStatus.RUNNING
+
+        assert hyper_band.is_done() == False
 
     def test_report_score(self, hyper_band):
         trial = hyper_band.get_next_sample()
@@ -585,43 +650,19 @@ class TestHyperBand:
         hyper_band.report_score(0, 0, trial.id, done=True)
         assert trial.get_progress() == trial.iteration
 
-    def test_is_done(self, hyper_band):
-        for bracket in hyper_band._brackets.values():
-            assert hyper_band.is_done() == False
-            while True:
-                trial = bracket.get_next_trial()
-                if trial is None:
-                    break
-
-                register_scores_to_trial(
-                    trial,
-                    [score for score in range(int(bracket._rungs[trial.rung].resource) - trial.get_progress())]
-                )
-
-        assert hyper_band.is_done() == True
-
     def test_get_best_config(self, hyper_band):
         max_score = 9999999
-        first_trial = True
-        for bracket in hyper_band._brackets.values():
-            assert hyper_band.is_done() == False
-            while True:
-                trial = bracket.get_next_trial()
-
-                if trial is None:
-                    break
-
-                if first_trial:
-                    register_scores_to_trial(
-                        trial,
-                        [max_score for _  in range(int(bracket._rungs[trial.rung].resource) - trial.get_progress())]
-                    )
-                    expected_configuration = trial.configuration
-                    first_trial = False
-                register_scores_to_trial(
-                    trial,
-                    [score for score in range(int(bracket._rungs[trial.rung].resource) - trial.get_progress())]
-                )
+        trial = hyper_band.get_next_sample()
+        expected_configuration = trial.configuration
+        trial.register_score(score=max_score, resource=trial.iteration)
+        while True:
+            trial = hyper_band.get_next_sample()
+            if trial is None:
+                break
+            register_scores_to_trial(
+                trial,
+                [val for val in range(int(trial.iteration - trial.get_progress()))]
+            )
 
         best_config = hyper_band.get_best_config()
 
@@ -642,7 +683,12 @@ class TestHyperBand:
         good_hyperband_args["prior_hyper_parameters"] = [prior1, prior2]
         hyper_band = HyperBand(**good_hyperband_args)
         first_trial = hyper_band.get_next_sample()
+        first_trial.status = TrialStatus.RUNNING
         second_trial = hyper_band.get_next_sample()
+        second_trial.status = TrialStatus.RUNNING
+
+        print(first_trial.configuration)
+        print(second_trial.configuration)
 
         assert first_trial.configuration == prior1
         assert second_trial.configuration == prior2
@@ -676,12 +722,13 @@ class TestHyperBand:
             if new_trial is None:
                 break
 
+            new_trial.status = TrialStatus.RUNNING
             if new_trial.bracket not in bracket_id_arr:
                 bracket_id_arr.append(new_trial.bracket)
 
         assert len(bracket_id_arr) > 1
 
-    def test_asynchronous_bracket(self, good_hyperband_args):
+    def test_synchronous_bracket(self, good_hyperband_args):
         good_hyperband_args["asynchronous_bracket"] = False
         hyper_band = HyperBand(**good_hyperband_args)
         bracket_id_arr = []
@@ -690,6 +737,7 @@ class TestHyperBand:
             if new_trial is None:
                 break
 
+            new_trial.status = TrialStatus.RUNNING
             if new_trial.bracket not in bracket_id_arr:
                 bracket_id_arr.append(new_trial.bracket)
 
@@ -712,8 +760,67 @@ class TestHyperBand:
     def test_print_result_without_train(self, hyper_band):
         hyper_band.print_result()
 
-    def test_report_trial_exit_abnormally(self,hyper_band):
+    def test_report_trial_exit_abnormally(self, hyper_band):
         trial = hyper_band.get_next_sample()
-        hyper_band.report_trial_exit_abnormally(trial.id)
+        trial.register_score(score=0, resource=trial.iteration-0.1)
         new_trial = hyper_band.get_next_sample()
         assert trial.id == new_trial.id
+
+    def test_absence_minimum_resource(self, good_hyperband_args):
+        del good_hyperband_args["minimum_resource"]
+        hyper_band = HyperBand(**good_hyperband_args)
+        first_trial = hyper_band.get_next_sample()
+        assert first_trial.iteration == hyper_band.maximum_resource
+        first_validation = 2
+        hyper_band.report_score(score=1, resource=first_validation, trial_id=first_trial.id)
+
+        iter_set = set()
+        while not hyper_band.is_done():
+            trial = hyper_band.get_next_sample()
+            iter_set.add(trial.iteration)
+            hyper_band.report_score(score=1, resource=trial.iteration, trial_id=trial.id)
+
+        s_max =  math.floor(
+            math.log(hyper_band.maximum_resource / first_validation, good_hyperband_args["reduction_factor"])
+        )
+        expected_min = hyper_band.maximum_resource * (good_hyperband_args["reduction_factor"] ** -s_max)
+
+        assert min(iter_set) == expected_min
+
+    def test_absence_maximum_resource(self, good_hyperband_args):
+        del good_hyperband_args["maximum_resource"]
+        hyper_band = HyperBand(**good_hyperband_args)
+        first_trial = hyper_band.get_next_sample()
+        max_validation = 120
+        for idx in range(max_validation):
+            hyper_band.report_score(score=1, resource=idx+1, trial_id=first_trial.id)
+
+        hyper_band.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
+        assert hyper_band.maximum_resource == max_validation
+
+    def test_absence_minimum_maximum_resource(self, good_hyperband_args):
+        del good_hyperband_args["minimum_resource"]
+        del good_hyperband_args["maximum_resource"]
+        hyper_band = HyperBand(**good_hyperband_args)
+        first_trial = hyper_band.get_next_sample()
+        first_validation = 2
+        max_validation = 120
+
+        for idx in range(first_validation, max_validation+1, first_validation):
+            hyper_band.report_score(score=1, resource=idx, trial_id=first_trial.id)
+        hyper_band.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
+
+        iter_set = set()
+        while not hyper_band.is_done():
+            trial = hyper_band.get_next_sample()
+            iter_set.add(trial.iteration)
+            hyper_band.report_score(score=1, resource=trial.iteration, trial_id=trial.id)
+
+        s_max =  math.floor(
+            math.log(hyper_band.maximum_resource / first_validation, good_hyperband_args["reduction_factor"])
+        )
+
+        expected_min = hyper_band.maximum_resource * (good_hyperband_args["reduction_factor"] ** -s_max)
+
+        assert min(iter_set) == expected_min
+        assert hyper_band.maximum_resource == max_validation

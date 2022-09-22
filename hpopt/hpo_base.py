@@ -4,6 +4,7 @@
 
 import json
 from abc import ABC, abstractmethod
+from enum import IntEnum
 from typing import Any, Dict, List, Optional, Union
 
 from hpopt.logger import get_logger
@@ -162,10 +163,6 @@ class HpoBase(ABC):
     def print_result(self):
         raise NotImplementedError
 
-    @abstractmethod
-    def report_trial_exit_abnormally(self, trial_id: Any):
-        raise NotImplementedError
-
 class Trial:
     def __init__(
         self,
@@ -178,6 +175,7 @@ class Trial:
         self.score: Dict[Union[float, int], Union[float, int]] = {}
         self._train_environment = train_environment
         self._iteration = None
+        self.status: TrialStatus = TrialStatus.READY
 
     @property
     def id(self):
@@ -255,3 +253,10 @@ class Trial:
         if self.iteration is None:
             raise ValueError("iteration isn't set yet.")
         return self.get_progress() >= self.iteration
+
+class TrialStatus(IntEnum):
+    UNKNOWN = -1
+    READY = 0
+    RUNNING = 1
+    STOP = 2
+    CUDAOOM = 3
