@@ -217,6 +217,7 @@ class HpoLoop:
         for uid, val in self._running_trials.items():
             process = val["process"]
             if not process.is_alive():
+                val["pipe"].close()
                 process.join()
                 trial_to_remove.append(uid)
 
@@ -246,6 +247,9 @@ class HpoLoop:
     
     def _join_all_processes(self):
         for val in self._running_trials.values():
+            val["pipe"].close()
+
+        for val in self._running_trials.values():
             process = val["process"]
             process.join()
 
@@ -270,16 +274,23 @@ def _report_score(
     done: bool = False
 ):
     logger.debug(f"score : {score}, progress : {progress}, trial_id : {trial_id}, pid : {os.getpid()}, done : {done}")
-    pipe.send(
-        {
-            "score" : score,
-            "progress" : progress,
-            "trial_id" : trial_id,
-            "pid" : os.getpid(),
-            "done" : done
-        }
-    )
-    trial_status = pipe.recv()
+    try:
+        pipe.send(
+            {
+                "score" : score,
+                "progress" : progress,
+                "trial_id" : trial_id,
+                "pid" : os.getpid(),
+                "done" : done
+            }
+        )
+    except BrokenPipeError:
+        return TrialStatus.STOP
+    try:
+        trial_status = pipe.recv()
+    except EOFError:
+        return TrialStatus.STOP
+
     logger.debug(f"trial_status : {trial_status}")
     return trial_status
 
