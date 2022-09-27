@@ -824,3 +824,24 @@ class TestHyperBand:
 
         assert min(iter_set) == expected_min
         assert hyper_band.maximum_resource == max_validation
+
+    @pytest.mark.parametrize("expected_time_ratio", [3, 4, 5, 6])
+    def test_hyperband_without_min_epoch(self, good_hyperband_args, expected_time_ratio):
+        """
+        validate that when min epoch is absent, first trial stops near iteration given after ASHA schedule is made
+        """
+        good_hyperband_args["expected_time_ratio"] = expected_time_ratio
+        del good_hyperband_args["minimum_resource"]
+        hyper_band = HyperBand(**good_hyperband_args)
+
+        val_interval = 3
+        trial = hyper_band.get_next_sample()
+        
+        for iter in range(val_interval, trial.iteration+1, val_interval):
+            score = iter + 1
+            trial_status = hyper_band.report_score(score, iter, trial.id)
+            if trial_status == TrialStatus.STOP:
+                break
+
+        hyper_band.report_score(score, iter, trial.id, True)
+        assert trial.get_progress() < trial.iteration + val_interval

@@ -655,8 +655,8 @@ class HyperBand(HpoBase):
                 self._minimum_resource = min(trial.score.keys())
                 if not self._need_to_find_resource_value():
                     self._brackets = self._make_brackets()
-                    if trial.is_done():
-                        return TrialStatus.STOP
+            if trial.is_done():
+                return TrialStatus.STOP
 
         return TrialStatus.RUNNING
 
