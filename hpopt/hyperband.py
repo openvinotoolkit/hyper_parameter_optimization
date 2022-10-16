@@ -409,26 +409,11 @@ class HyperBand(HpoBase):
         return self.maximum_resource is None or self._minimum_resource is None
 
     def _make_brackets(self):
-        if self._need_to_auto_config():
-            brackets_config = self.auto_config()
-        else:
-            brackets_config = self._make_default_brackets_setting()
-        return self._make_brackets_as_config(brackets_config)
-
-    def _need_to_auto_config(self):
-        """check full ASHA resource exceeds expected_time_ratio."""
         if self.expected_time_ratio is None:
-            return False
-
-        total_resource = 0
-        for idx in range(self._calculate_s_max()+1):
-            num_max_rung_trials = self._get_num_max_rung_trials(idx)
-            total_resource += self._calculate_bracket_resource(num_max_rung_trials, idx)
-
-        return (
-            total_resource * self.expected_time_ratio * self.acceptable_additional_time_ratio
-            > self.maximum_resource
-        )
+            brackets_config = self._make_default_brackets_setting()
+        else:
+            brackets_config = self.auto_config()
+        return self._make_brackets_as_config(brackets_config)
 
     def _calculate_bracket_resource(self, num_max_rung_trials: int, bracket_index: int):
         """calculate how much resource is needed for the bracket given that resume is available."""
@@ -600,6 +585,26 @@ class HyperBand(HpoBase):
             bracket.save_results(save_path)
 
     def auto_config(self):
+        if self._need_to_dcrease_hyerpband_scale():
+            return self._decrease_hyperband_scale()
+        else:
+            return self._increase_hyperband_scale()
+
+    def _need_to_dcrease_hyerpband_scale(self):
+        """check full ASHA resource exceeds expected_time_ratio."""
+        if self.expected_time_ratio is None:
+            return False
+
+        total_resource = 0
+        for idx in range(self._calculate_s_max()+1):
+            num_max_rung_trials = self._get_num_max_rung_trials(idx)
+            total_resource += self._calculate_bracket_resource(num_max_rung_trials, idx)
+
+        return (
+            total_resource > self.num_full_iterations * self.expected_time_ratio * self.acceptable_additional_time_ratio
+        )
+
+    def _decrease_hyperband_scale(self):
         """
         from bracket which has biggest number of rung, check that it's resource exceeds expected_time_ratio
         if bracket is added. If not, bracket is added. If it does, check that number of trials for bracket
@@ -608,7 +613,7 @@ class HyperBand(HpoBase):
         brackets_setting = []
         total_resource = 0
         resource_upper_bound = (
-            self.maximum_resource
+            self.num_full_iterations
             * self.expected_time_ratio
             * self.acceptable_additional_time_ratio
         )
@@ -638,6 +643,47 @@ class HyperBand(HpoBase):
 
         return brackets_setting
 
+    def _increase_hyperband_scale(self):
+        total_resource = 0
+        bracket_status = {}
+        s_max = self._calculate_s_max()
+        sum_unit_resource = 0
+        for idx in range(s_max+1):
+            num_max_rung_trials = self._get_num_max_rung_trials(idx)
+            unit_resource = self._calculate_bracket_resource(1, idx)
+            sum_unit_resource += unit_resource
+            bracket_status[idx] = {"num_max_rung_trials" : num_max_rung_trials, "unit_resource" : unit_resource}
+            total_resource += num_max_rung_trials * unit_resource
+
+        maximum_reseource = self.num_full_iterations * self.expected_time_ratio * self.acceptable_additional_time_ratio
+
+        available_num_trials = int((maximum_reseource - total_resource) // sum_unit_resource)
+        total_resource += sum_unit_resource * available_num_trials
+        for idx in range(s_max+1):
+            bracket_status[idx]["num_max_rung_trials"] += available_num_trials
+
+        while True:
+            update_flag = False
+            for idx in range(s_max, -1, -1):
+                if total_resource + bracket_status[idx]["unit_resource"] < maximum_reseource:
+                    total_resource += bracket_status[idx]["unit_resource"]
+                    bracket_status[idx]["num_max_rung_trials"] += 1
+                    update_flag = True
+
+            if not update_flag:
+                break
+
+        brackets_setting = []
+        for idx in range(s_max+1): 
+            brackets_setting.append(
+                {
+                    "bracket_index" : idx,
+                    "num_trials" : self._calculate_num_bracket_trials(bracket_status[idx]["num_max_rung_trials"], idx)
+                } 
+            )
+
+        return brackets_setting
+
     def get_progress(self):
         raise NotImplementedError
 
@@ -646,6 +692,7 @@ class HyperBand(HpoBase):
         if done:
             if self.maximum_resource is None:
                 self.maximum_resource = trial.get_progress()
+                self.num_full_iterations = self.maximum_resource
                 if not self._need_to_find_resource_value():
                     self._brackets = self._make_brackets()
             trial.finalize()

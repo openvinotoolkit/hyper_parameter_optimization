@@ -73,7 +73,7 @@ def good_hyperband_args():
         "save_path" : "/tmp/hpopt",
         "mode" : "max",
         "num_workers" : 1,
-        "num_full_iterations" : 1000,
+        "num_full_iterations" : 64,
         "non_pure_train_ratio" : 0.2,
         "full_dataset_size" : 100,
         "metric" : "mAP",
@@ -621,10 +621,8 @@ class TestHyperBand:
             trial = hyper_band.get_next_sample()
             if trial is None:
                 break
-            register_scores_to_trial(
-                trial,
-                [val for val in range(int(trial.iteration - trial.get_progress()))]
-            )
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
 
         assert hyper_band.is_done()
 
@@ -654,15 +652,14 @@ class TestHyperBand:
         max_score = 9999999
         trial = hyper_band.get_next_sample()
         expected_configuration = trial.configuration
-        trial.register_score(score=max_score, resource=trial.iteration)
+        hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+        hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
         while True:
             trial = hyper_band.get_next_sample()
             if trial is None:
                 break
-            register_scores_to_trial(
-                trial,
-                [val for val in range(int(trial.iteration - trial.get_progress()))]
-            )
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
 
         best_config = hyper_band.get_best_config()
 
@@ -693,7 +690,7 @@ class TestHyperBand:
         assert first_trial.configuration == prior1
         assert second_trial.configuration == prior2
 
-    def test_auto_config(self, good_hyperband_args):
+    def test_auto_config_decrease(self, good_hyperband_args):
         full_train_resource = good_hyperband_args["maximum_resource"]
         expected_time_ratio = 4
         good_hyperband_args["expected_time_ratio"] = expected_time_ratio
@@ -708,12 +705,32 @@ class TestHyperBand:
             resource = ceil(trial.iteration - trial.get_progress())
             total_resource += resource
 
-            register_scores_to_trial(
-                trial,
-                [score for score in range(resource)]
-            )
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
 
-        assert full_train_resource * expected_time_ratio * hyperband.acceptable_additional_time_ratio >= total_resource
+        maximum_resource = full_train_resource * expected_time_ratio * hyperband.acceptable_additional_time_ratio
+        assert  maximum_resource >= total_resource >= maximum_resource * 0.8
+
+    def test_auto_config_increase(self, good_hyperband_args):
+        full_train_resource = good_hyperband_args["maximum_resource"]
+        expected_time_ratio = 100
+        good_hyperband_args["expected_time_ratio"] = expected_time_ratio
+        hyperband = HyperBand(**good_hyperband_args)
+
+        total_resource = 0
+        while True:
+            trial = hyperband.get_next_sample()
+            if trial is None:
+                break
+
+            resource = ceil(trial.iteration - trial.get_progress())
+            total_resource += resource
+
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
+
+        maximum_resource = full_train_resource * expected_time_ratio * hyperband.acceptable_additional_time_ratio 
+        assert  maximum_resource >= total_resource >= maximum_resource * 0.8
 
     def test_asynchronous_bracket(self, hyper_band):
         bracket_id_arr = []
@@ -750,10 +767,8 @@ class TestHyperBand:
                 break
 
             resource = ceil(trial.iteration - trial.get_progress())
-            register_scores_to_trial(
-                trial,
-                [score for score in range(resource)]
-            )
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
 
         hyper_band.print_result()
 
@@ -762,7 +777,7 @@ class TestHyperBand:
 
     def test_report_trial_exit_abnormally(self, hyper_band):
         trial = hyper_band.get_next_sample()
-        trial.register_score(score=0, resource=trial.iteration-0.1)
+        hyper_band.report_score(score=50, resource=trial.iteration-0.1, trial_id=trial.id, done=False)
         new_trial = hyper_band.get_next_sample()
         assert trial.id == new_trial.id
 
@@ -797,6 +812,68 @@ class TestHyperBand:
 
         hyper_band.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
         assert hyper_band.maximum_resource == max_validation
+
+    def test_auto_config_decrease_withabsence_maximum_resource(self, good_hyperband_args):
+        del good_hyperband_args["maximum_resource"]
+        expected_time_ratio = 4
+        good_hyperband_args["expected_time_ratio"] = expected_time_ratio
+        hyperband = HyperBand(**good_hyperband_args)
+
+        first_trial = hyperband.get_next_sample()
+        max_validation = 120
+        for idx in range(max_validation):
+            hyperband.report_score(score=1, resource=idx+1, trial_id=first_trial.id)
+
+        hyperband.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
+        total_resource = max_validation
+        while True:
+            trial = hyperband.get_next_sample()
+            if trial is None:
+                break
+
+            resource = trial.iteration - trial.get_progress()
+            total_resource += resource
+
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
+
+        maximum_resource = (
+            hyperband.num_full_iterations
+            * expected_time_ratio
+            * hyperband.acceptable_additional_time_ratio
+        )
+        assert maximum_resource >= total_resource >= maximum_resource * 0.8
+
+    def test_auto_config_increase_with_absence_maximum_resource(self, good_hyperband_args):
+        del good_hyperband_args["maximum_resource"]
+        expected_time_ratio = 100
+        good_hyperband_args["expected_time_ratio"] = expected_time_ratio
+        hyperband = HyperBand(**good_hyperband_args)
+
+        first_trial = hyperband.get_next_sample()
+        max_validation = 120
+        for idx in range(max_validation):
+            hyperband.report_score(score=1, resource=idx+1, trial_id=first_trial.id)
+
+        hyperband.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
+        total_resource = max_validation
+        while True:
+            trial = hyperband.get_next_sample()
+            if trial is None:
+                break
+
+            resource = trial.iteration - trial.get_progress()
+            total_resource += resource
+
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
+
+        maximum_resource = (
+            hyperband.num_full_iterations
+            * expected_time_ratio
+            * hyperband.acceptable_additional_time_ratio
+        )
+        assert maximum_resource >= total_resource >= maximum_resource * 0.8
 
     def test_absence_minimum_maximum_resource(self, good_hyperband_args):
         del good_hyperband_args["minimum_resource"]

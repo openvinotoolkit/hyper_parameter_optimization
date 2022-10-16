@@ -152,7 +152,7 @@ class HpoBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def report_score(self, score, resource, trial_id):
+    def report_score(self, score, resource, trial_id, done):
         raise NotImplementedError
 
     @abstractmethod
