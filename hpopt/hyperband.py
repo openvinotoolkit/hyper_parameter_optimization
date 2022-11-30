@@ -708,6 +708,9 @@ class HyperBand(HpoBase):
         return TrialStatus.RUNNING
 
     def is_done(self):
+        if self.maximum_resource is not None:
+            if self.get_current_run_epoch() >= self.maximum_resource * 8:
+                return True
         if not self._brackets:
             return False
         for bracket in self._brackets.values():
@@ -738,3 +741,10 @@ class HyperBand(HpoBase):
         )
         for bracket in self._brackets.values():
             bracket.print_result()
+
+    def get_current_run_epoch(self):
+        epoch = 0
+        for trial in self._trials.values():
+            epoch += trial.get_progress()
+
+        return epoch
