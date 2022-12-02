@@ -585,10 +585,43 @@ class HyperBand(HpoBase):
             bracket.save_results(save_path)
 
     def auto_config(self):
+        if self._trials:
+            self._adjust_minimum_resource()
         if self._need_to_dcrease_hyerpband_scale():
             return self._decrease_hyperband_scale()
         else:
             return self._increase_hyperband_scale()
+
+    def _adjust_minimum_resource(self):
+        if self.maximum_resource < self._reduction_factor:
+            logger.debug("maximum_resource is less than reduction factor. adjusting minimum resource is skipped.")
+            return
+
+        trial = None
+        for trial in self._trials.values():
+            if trial.is_done():
+                break
+        if trial is None:
+            logger.debug("There is no finished trial. adjusting minimum resource is skipped.")
+            return
+
+        cur_score = 0
+        best_score = 0
+        minimum_resource = 0
+        for resource, score in trial.score.items():
+            if resource > self.maximum_resource // self._reduction_factor:
+                break
+            cur_score = cur_score * 0.5 + score * 0.5
+            if not left_is_better(best_score, cur_score, self.mode):
+                best_score = cur_score
+                if minimum_resource == 0:
+                    minimum_resource = resource
+            else:
+                minimum_resource = 0
+
+        if minimum_resource == 0:
+            minimum_resource = self.maximum_resource // self._reduction_factor
+        self._minimum_resource = minimum_resource
 
     def _need_to_dcrease_hyerpband_scale(self):
         """check full ASHA resource exceeds expected_time_ratio."""
