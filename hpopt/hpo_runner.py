@@ -1,6 +1,5 @@
 import multiprocessing
 import os
-import queue
 from abc import ABC, abstractmethod
 from functools import partial
 from multiprocessing import Process
@@ -198,17 +197,23 @@ class HpoLoop:
         
         trial.status = TrialStatus.RUNNING
         uid = self._get_uid()
+
+        origin_env = os.environ
         env = self._resource_manager.reserve_resource(uid)
+        if env is not None:
+            for key, val in env.items():
+                os.environ[key] = val
+
         pipe1, pipe2 = self._mp.Pipe(True)
         process = self._mp.Process(
             target=_run_train,
             args=(
                 self._train_func,
                 trial.get_train_configuration(),
-                partial(_report_score, pipe=pipe2, trial_id=trial.id),
-                env
+                partial(_report_score, pipe=pipe2, trial_id=trial.id)
             )
         )
+        os.environ = origin_env
         self._running_trials[uid] = {"process" : process, "trial" : trial, "pipe" : pipe1}
         process.start()
 
@@ -260,10 +265,8 @@ class HpoLoop:
         self._uid_index += 1
         return uid
 
-def _run_train(train_func: Callable, hp_config: Dict, report_func: Callable, env: Optional[Dict] = None):
-    if env is not None:
-        for key, val in env.items():
-            os.environ[key] = val
+def _run_train(train_func: Callable, hp_config: Dict, report_func: Callable):
+    multiprocessing.set_start_method(None, True)  # set multi process method as default
     train_func(hp_config, report_func)
 
 def _report_score(

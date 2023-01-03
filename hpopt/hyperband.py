@@ -550,8 +550,7 @@ class HyperBand(HpoBase):
 
     def get_next_sample(self):
         if not self._brackets:
-            trial = self._make_trial_to_estimate_resource()
-            return trial
+            return self._make_trial_to_estimate_resource()
 
         next_sample = None
         for bracket in self._brackets.values():
@@ -567,14 +566,13 @@ class HyperBand(HpoBase):
         if self._trials:
             return None
 
-        is_prior = True if self.prior_hyper_parameters else False
         trial = self._make_new_hyper_parameter_configs(1)[0]
         if self.maximum_resource is None:
             trial.iteration = self.num_full_iterations
             trial.bracket = 0
         else:
             trial.iteration = self.maximum_resource
-            if is_prior:
+            if self.prior_hyper_parameters:
                 trial.bracket = 0
         return trial
 
@@ -593,6 +591,10 @@ class HyperBand(HpoBase):
             return self._increase_hyperband_scale()
 
     def _adjust_minimum_resource(self):
+        """
+        Set meaningful minimum resource. Goal of this function is to avoid setting minimum resource too low
+        to distinguish which trial is better.
+        """
         if self.maximum_resource < self._reduction_factor:
             logger.debug("maximum_resource is less than reduction factor. adjusting minimum resource is skipped.")
             return
@@ -633,9 +635,7 @@ class HyperBand(HpoBase):
             num_max_rung_trials = self._get_num_max_rung_trials(idx)
             total_resource += self._calculate_bracket_resource(num_max_rung_trials, idx)
 
-        return (
-            total_resource > self.num_full_iterations * self.expected_time_ratio * self.acceptable_additional_time_ratio
-        )
+        return total_resource > self._get_expected_total_resource()
 
     def _decrease_hyperband_scale(self):
         """
@@ -645,11 +645,7 @@ class HyperBand(HpoBase):
         """
         brackets_setting = []
         total_resource = 0
-        resource_upper_bound = (
-            self.num_full_iterations
-            * self.expected_time_ratio
-            * self.acceptable_additional_time_ratio
-        )
+        resource_upper_bound = self._get_expected_total_resource()
 
         reserved_bracket = None
         reserved_resource = 0
@@ -675,6 +671,16 @@ class HyperBand(HpoBase):
                     break
 
         return brackets_setting
+
+    def _get_expected_total_resource(self):
+        if self.expected_time_ratio is None:
+            raise ValueError("expected time ratio should be set to get expceted total resource")
+        return (
+            self.num_full_iterations
+            * self.expected_time_ratio
+            * self.acceptable_additional_time_ratio
+            * self.num_workers
+        )
 
     def _increase_hyperband_scale(self):
         total_resource = 0
