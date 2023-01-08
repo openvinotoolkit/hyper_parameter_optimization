@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+import copy
 import math
 import json
 from math import ceil
@@ -690,6 +691,32 @@ class TestHyperBand:
         assert first_trial.configuration == prior1
         assert second_trial.configuration == prior2
 
+    @pytest.mark.parametrize("num_prior_param", [10, 100, 1000])
+    def test_many_prior_hyper_parameters(self, good_hyperband_args, num_prior_param):
+        prior_hyper_parameters = []
+        for i in range(num_prior_param):
+            new_prior = {}
+            for key, val in good_hyperband_args["search_space"].items():
+                new_prior[key] = val["min"] + i
+            prior_hyper_parameters.append(new_prior)
+        good_hyperband_args["prior_hyper_parameters"] = copy.deepcopy(prior_hyper_parameters)
+
+        hyper_band = HyperBand(**good_hyperband_args)
+
+        i = 0
+        while i < num_prior_param:
+            trial = hyper_band.get_next_sample()
+            if trial == None:
+                break
+
+            if not trial.score:
+                assert trial.configuration == prior_hyper_parameters[i]
+                i += 1
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
+            hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
+
+        assert i == num_prior_param or hyper_band.is_done()
+
     def test_auto_config_decrease(self, good_hyperband_args):
         full_train_resource = good_hyperband_args["maximum_resource"]
         expected_time_ratio = 4
@@ -802,36 +829,69 @@ class TestHyperBand:
 
         assert min(iter_set) == expected_min
 
-    def test_absence_maximum_resource(self, good_hyperband_args):
+    @pytest.mark.parametrize("num_trial_to_estimate", [10, 30, 100])
+    def test_without_maximum_resource(self, good_hyperband_args, num_trial_to_estimate):
         del good_hyperband_args["maximum_resource"]
-        hyper_band = HyperBand(**good_hyperband_args)
-        first_trial = hyper_band.get_next_sample()
         max_validation = 120
-        for idx in range(max_validation):
-            hyper_band.report_score(score=1, resource=idx+1, trial_id=first_trial.id)
+        hyper_band = HyperBand(**good_hyperband_args)
 
+        trials_to_estimate = []
+        for _ in range(num_trial_to_estimate):
+            trials_to_estimate.append(hyper_band.get_next_sample())
+
+        for trial in reversed(trials_to_estimate[1:]):
+            assert trial.iteration == good_hyperband_args["minimum_resource"]
+            for iter in range(1, trial.iteration+1):
+                if hyper_band.report_score(score=1, resource=iter, trial_id=trial.id) == TrialStatus.STOP:
+                    break
+            assert iter == good_hyperband_args["minimum_resource"]
+
+        first_trial = trials_to_estimate[0]
+        hyper_band.report_score(score=1, resource=max_validation, trial_id=first_trial.id)
         hyper_band.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
+
         assert hyper_band.maximum_resource == max_validation
 
-    def test_auto_config_decrease_withabsence_maximum_resource(self, good_hyperband_args):
+    @pytest.mark.parametrize("num_trial_to_estimate", [10, 30, 100])
+    def test_auto_config_decrease_without_maximum_resource(self, good_hyperband_args, num_trial_to_estimate):
+        """
+        Validate auto config decreases ASHA resource well without maximum_resource.
+        Current auto config doesn't consider already uesd resource by unused trials to estimate.
+        To align that, this test also doesn't add it to total resource.
+        """
         del good_hyperband_args["maximum_resource"]
         expected_time_ratio = 4
+        max_validation = 120
+        total_resource = max_validation
         good_hyperband_args["expected_time_ratio"] = expected_time_ratio
         hyperband = HyperBand(**good_hyperband_args)
+        trial_ids = set()
 
-        first_trial = hyperband.get_next_sample()
-        max_validation = 120
-        for idx in range(max_validation):
-            hyperband.report_score(score=1, resource=idx+1, trial_id=first_trial.id)
+        trials_to_estimate = []
+        for _ in range(num_trial_to_estimate):
+            trial = hyperband.get_next_sample()
+            trials_to_estimate.append(trial)
 
+        for trial in reversed(trials_to_estimate[1:]):
+            assert trial.iteration == good_hyperband_args["minimum_resource"]
+            for iter in range(1, trial.iteration+1):
+                if hyperband.report_score(score=1, resource=iter, trial_id=trial.id) == TrialStatus.STOP:
+                    break
+
+        first_trial = trials_to_estimate[0]
+        hyperband.report_score(score=1, resource=max_validation, trial_id=first_trial.id)
         hyperband.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
-        total_resource = max_validation
+
         while True:
             trial = hyperband.get_next_sample()
             if trial is None:
                 break
+            if trial.id not in trial_ids:
+                resource = trial.iteration
+                trial_ids.add(trial.id)
+            else:
+                resource = trial.iteration - trial.get_progress()
 
-            resource = trial.iteration - trial.get_progress()
             total_resource += resource
 
             hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
@@ -842,27 +902,44 @@ class TestHyperBand:
             * expected_time_ratio
             * hyperband.acceptable_additional_time_ratio
         )
+
         assert maximum_resource >= total_resource >= maximum_resource * 0.8
 
-    def test_auto_config_increase_with_absence_maximum_resource(self, good_hyperband_args):
+    @pytest.mark.parametrize("num_trial_to_estimate", [10, 30, 100])
+    def test_auto_config_increase_without_maximum_resource(self, good_hyperband_args, num_trial_to_estimate):
         del good_hyperband_args["maximum_resource"]
         expected_time_ratio = 100
+        max_validation = 120
         good_hyperband_args["expected_time_ratio"] = expected_time_ratio
         hyperband = HyperBand(**good_hyperband_args)
 
-        first_trial = hyperband.get_next_sample()
-        max_validation = 120
-        for idx in range(max_validation):
-            hyperband.report_score(score=1, resource=idx+1, trial_id=first_trial.id)
+        trials_to_estimate = []
+        for _ in range(num_trial_to_estimate):
+            trial = hyperband.get_next_sample()
+            trials_to_estimate.append(trial)
 
+        for trial in reversed(trials_to_estimate[1:]):
+            assert trial.iteration == good_hyperband_args["minimum_resource"]
+            for iter in range(1, trial.iteration+1):
+                if hyperband.report_score(score=1, resource=iter, trial_id=trial.id) == TrialStatus.STOP:
+                    break
+
+        first_trial = trials_to_estimate[0]
+        hyperband.report_score(score=1, resource=max_validation, trial_id=first_trial.id)
         hyperband.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
+
         total_resource = max_validation
+        trial_ids = set()
         while True:
             trial = hyperband.get_next_sample()
             if trial is None:
                 break
+            if trial.id not in trial_ids:
+                resource = trial.iteration
+                trial_ids.add(trial.id)
+            else:
+                resource = trial.iteration - trial.get_progress()
 
-            resource = trial.iteration - trial.get_progress()
             total_resource += resource
 
             hyperband.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
@@ -875,16 +952,27 @@ class TestHyperBand:
         )
         assert maximum_resource >= total_resource >= maximum_resource * 0.8
 
-    def test_absence_minimum_maximum_resource(self, good_hyperband_args):
+    @pytest.mark.parametrize("num_trial_to_estimate", [10, 30, 100])
+    def test_without_minimum_maximum_resource(self, good_hyperband_args, num_trial_to_estimate):
         del good_hyperband_args["minimum_resource"]
         del good_hyperband_args["maximum_resource"]
         hyper_band = HyperBand(**good_hyperband_args)
         first_trial = hyper_band.get_next_sample()
-        first_validation = 2
+        validation_interval = 2
         max_validation = 120
 
-        for idx in range(first_validation, max_validation+1, first_validation):
-            hyper_band.report_score(score=1, resource=idx, trial_id=first_trial.id)
+        trials_to_estimate = []
+        for _ in range(num_trial_to_estimate):
+            trial = hyper_band.get_next_sample()
+            trials_to_estimate.append(trial)
+
+        for trial in trials_to_estimate[1:]:
+            for iter in range(validation_interval, trial.iteration+1, validation_interval):
+                if hyper_band.report_score(score=1, resource=iter, trial_id=trial.id) == TrialStatus.STOP:
+                    break
+
+        first_trial = trials_to_estimate[0]
+        hyper_band.report_score(score=1, resource=max_validation, trial_id=first_trial.id)
         hyper_band.report_score(score=0, resource=0, trial_id=first_trial.id, done=True)
 
         iter_set = set()
@@ -894,7 +982,7 @@ class TestHyperBand:
             hyper_band.report_score(score=1, resource=trial.iteration, trial_id=trial.id)
 
         s_max =  math.floor(
-            math.log(hyper_band.maximum_resource / first_validation, good_hyperband_args["reduction_factor"])
+            math.log(hyper_band.maximum_resource / validation_interval, good_hyperband_args["reduction_factor"])
         )
 
         expected_min = hyper_band.maximum_resource * (good_hyperband_args["reduction_factor"] ** -s_max)
@@ -903,9 +991,10 @@ class TestHyperBand:
         assert hyper_band.maximum_resource == max_validation
 
     @pytest.mark.parametrize("expected_time_ratio", [3, 4, 5, 6])
-    def test_hyperband_without_min_epoch(self, good_hyperband_args, expected_time_ratio):
+    def test_hyperband_without_minimum_resource(self, good_hyperband_args, expected_time_ratio):
         """
-        validate that when min epoch is absent, first trial stops near iteration given after ASHA schedule is made
+        validate that when there is no minimum_resource,
+        first trial stops near iteration given after ASHA schedule is made
         """
         good_hyperband_args["expected_time_ratio"] = expected_time_ratio
         del good_hyperband_args["minimum_resource"]

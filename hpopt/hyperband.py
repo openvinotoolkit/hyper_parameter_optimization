@@ -462,29 +462,32 @@ class HyperBand(HpoBase):
         total_num_trials = 0
         for bracket_setting in brackets_settings:
             total_num_trials += bracket_setting["num_trials"]
-        if self._trials:
-            reserved_trial = list(self._trials.values())[0]
-        else:
-            reserved_trial = None
-        configurations = self._make_new_hyper_parameter_configs(total_num_trials - len(self._trials))
+        reserved_trials = list(self._trials.values()) if self._trials else []
+        if len(reserved_trials) >  total_num_trials:
+            reserved_trials = reserved_trials[:total_num_trials]
+        configurations = self._make_new_hyper_parameter_configs(total_num_trials - len(reserved_trials))
 
         for bracket_setting in brackets_settings:
             bracket_idx = bracket_setting["bracket_index"]
-            num_bracket_trials = bracket_setting["num_trials"]
+            num_trial_to_initialize = bracket_setting["num_trials"]
             minimum_resource = self.maximum_resource * (self._reduction_factor ** -bracket_idx)
 
             bracket_configurations = []
-            if reserved_trial is not None:
+            for reserved_trial in reserved_trials:
                 if (
                     (reserved_trial.bracket is None and reserved_trial.get_progress() <= minimum_resource)
                     or reserved_trial.bracket == bracket_idx 
                 ):
-                        num_bracket_trials -= 1
-                        bracket_configurations.append(reserved_trial)
-                        reserved_trial = None
+                    num_trial_to_initialize -= 1
+                    bracket_configurations.append(reserved_trial)
+                    if len(bracket_configurations) >= bracket_setting["num_trials"]:
+                        break
 
-            bracket_configurations.extend(configurations[:num_bracket_trials])
-            configurations = configurations[num_bracket_trials:]
+            for selected_trial in bracket_configurations:
+                reserved_trials.remove(selected_trial)
+
+            bracket_configurations.extend(configurations[:num_trial_to_initialize])
+            configurations = configurations[num_trial_to_initialize:]
 
             bracket = Bracket(
                 bracket_idx,
@@ -563,17 +566,17 @@ class HyperBand(HpoBase):
         return next_sample
 
     def _make_trial_to_estimate_resource(self):
-        if self._trials:
-            return None
-
         trial = self._make_new_hyper_parameter_configs(1)[0]
         if self.maximum_resource is None:
-            trial.iteration = self.num_full_iterations
-            trial.bracket = 0
+            if len(self._trials) == 1:  # first trial to estimate
+                trial.bracket = 0
+                trial.iteration = self.num_full_iterations
+            elif self._minimum_resource is not None:
+                trial.iteration = self._minimum_resource
+            else:
+                trial.iteration = self.num_full_iterations
         else:
             trial.iteration = self.maximum_resource
-            if self.prior_hyper_parameters:
-                trial.bracket = 0
         return trial
 
     def save_results(self):
@@ -647,17 +650,15 @@ class HyperBand(HpoBase):
         total_resource = 0
         resource_upper_bound = self._get_expected_total_resource()
 
-        reserved_bracket = None
         reserved_resource = 0
-        if self._trials:
-            trial = list(self._trials.values())[0]
-            reserved_bracket = trial.bracket
-            if reserved_bracket is not None:
-                reserved_resource = self._calculate_bracket_resource(1, reserved_bracket)
-                total_resource += reserved_resource
+        if self._trials:  # reserve resources for trials which should be run on bracket 0
+            for trial in self._trials.values():
+                if trial.bracket == 0:
+                    reserved_resource += self.maximum_resource
+            total_resource += reserved_resource
 
         for idx in range(self._calculate_s_max(), -1, -1):
-            if idx == reserved_bracket:
+            if self._trials and idx == 0:
                 total_resource -= reserved_resource
 
             origin_num_max_rung_trials = self._get_num_max_rung_trials(idx)
@@ -686,6 +687,8 @@ class HyperBand(HpoBase):
         total_resource = 0
         bracket_status = {}
         s_max = self._calculate_s_max()
+
+        # If all brackets can run more than one, then multiply number of trials on each bracket as many as possible
         sum_unit_resource = 0
         for idx in range(s_max+1):
             num_max_rung_trials = self._get_num_max_rung_trials(idx)
@@ -694,13 +697,14 @@ class HyperBand(HpoBase):
             bracket_status[idx] = {"num_max_rung_trials" : num_max_rung_trials, "unit_resource" : unit_resource}
             total_resource += num_max_rung_trials * unit_resource
 
-        maximum_reseource = self.num_full_iterations * self.expected_time_ratio * self.acceptable_additional_time_ratio
-
+        maximum_reseource = self._get_expected_total_resource()
         available_num_trials = int((maximum_reseource - total_resource) // sum_unit_resource)
-        total_resource += sum_unit_resource * available_num_trials
+
         for idx in range(s_max+1):
             bracket_status[idx]["num_max_rung_trials"] += available_num_trials
+        total_resource += sum_unit_resource * available_num_trials
 
+        # add trials to brackets from big index as many as possible
         while True:
             update_flag = False
             for idx in range(s_max, -1, -1):
@@ -712,8 +716,9 @@ class HyperBand(HpoBase):
             if not update_flag:
                 break
 
+        # set brackets setting
         brackets_setting = []
-        for idx in range(s_max+1): 
+        for idx in range(s_max+1):
             brackets_setting.append(
                 {
                     "bracket_index" : idx,
@@ -741,7 +746,7 @@ class HyperBand(HpoBase):
                 self._minimum_resource = min(trial.score.keys())
                 if not self._need_to_find_resource_value():
                     self._brackets = self._make_brackets()
-            if trial.is_done():
+            if trial.is_done() or trial.bracket is None:
                 return TrialStatus.STOP
 
         return TrialStatus.RUNNING
