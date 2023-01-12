@@ -771,7 +771,7 @@ class HyperBand(HpoBase):
 
         if best_trial is None:
             return None
-        return best_trial.configuration
+        return {"id" : best_trial.id , "config" : best_trial.configuration}
 
     def print_result(self):
         print(

@@ -189,8 +189,6 @@ class HpoLoop:
         self._get_reports()
         self._join_all_processes()
 
-        return self._hpo_algo.get_best_config()
-
     def _start_trial_process(self, trial: Trial):
         logger.info(f"{trial.id} trial is now running.")
         logger.debug(f"{trial.id} hyper paramter => {trial.configuration}")
@@ -306,5 +304,4 @@ def run_hpo_loop(
     available_gpu: Optional[str] = None,
 ):
     hpo_loop = HpoLoop(hpo_algo, train_func, resource_type, num_parallel_trial, num_gpu_for_single_trial,available_gpu)
-    best_config = hpo_loop.run()
-    return best_config
+    hpo_loop.run()
