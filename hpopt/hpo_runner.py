@@ -9,11 +9,7 @@ from hpopt.hpo_base import HpoBase, Trial, TrialStatus
 from hpopt.logger import get_logger
 from hpopt.utils import check_positive
 
-try:
-    import pynvml
-    from pynvml import NVMLError
-except ImportError:
-    pynvml = None
+import torch
 
 logger = get_logger()
 
@@ -71,11 +67,7 @@ class GPUResourceManager(ResourceManager):
             if os.getenv("CUDA_VISIBLE_DEVICES") is not None:
                 available_gpu = self._transform_gpu_format_from_string_to_arr(os.getenv("CUDA_VISIBLE_DEVICES"))
             else:
-                if pynvml is None:
-                    raise RuntimeError("If pynvml can't be imported, you should set availabe_gpu.")
-                pynvml.nvmlInit()
-                num_gpus = pynvml.nvmlDeviceGetCount()
-                pynvml.nvmlShutdown()
+                num_gpus = torch.cuda.device_count()
                 available_gpu = [val for val in range(num_gpus)]
         else:
             available_gpu = self._transform_gpu_format_from_string_to_arr(available_gpu)
@@ -121,19 +113,9 @@ def get_resource_manager(
     num_gpu_for_single_trial: Optional[int] = None,
     available_gpu: Optional[str] = None,
 ):
-    if resource_type == "gpu":
-        if pynvml is None and available_gpu is None:
-            logger.warning(
-                "pynvml isn't installed and available gpu aren't specified. resource type is modified to cpu."
-            )
-            resource_type = "cpu"
-        else:
-            try:
-                pynvml.nvmlInit()
-                pynvml.nvmlShutdown()
-            except NVMLError:
-                logger.warning("GPU can't be used now. resource type is modified to cpu.")
-                resource_type = "cpu"
+    if resource_type == "gpu" and not torch.cuda.is_available():
+        logger.warning("GPU can't be used now. resource type is modified to cpu.")
+        resource_type = "cpu"
 
     if resource_type == "cpu":
         args = {"num_parallel_trial" : num_parallel_trial}

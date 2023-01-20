@@ -652,9 +652,9 @@ class TestHyperBand:
     def test_get_best_config(self, hyper_band):
         max_score = 9999999
         trial = hyper_band.get_next_sample()
-        expected_configuration = trial.configuration
-        hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=False)
-        hyper_band.report_score(score=50, resource=trial.iteration, trial_id=trial.id, done=True)
+        expected_configuration = {"id" : trial.id, "config" : trial.configuration}
+        hyper_band.report_score(score=max_score, resource=trial.iteration, trial_id=trial.id, done=False)
+        hyper_band.report_score(score=max_score, resource=trial.iteration, trial_id=trial.id, done=True)
         while True:
             trial = hyper_band.get_next_sample()
             if trial is None:

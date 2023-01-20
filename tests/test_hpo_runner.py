@@ -146,7 +146,8 @@ def test_get_resource_manager_wrong_resource_type():
         get_resource_manager("wrong")
 
 def test_get_resource_manager_gpu_without_available_gpu(mocker):
-    mocker.patch("hpopt.hpo_runner.pynvml", None)
+    mock_is_available = mocker.patch("hpopt.hpo_runner.torch.cuda.is_available")
+    mock_is_available.return_value = False
 
     manager = get_resource_manager("gpu")
     assert isinstance(manager, CPUResourceManager)

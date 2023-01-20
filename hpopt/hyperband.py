@@ -4,7 +4,7 @@ import os
 from os import path as osp
 from typing import Any, Dict, List, Optional, Union
 
-from pyDOE.doe_lhs import lhs as latin_hypercube_sample
+from scipy.stats.qmc import LatinHypercube
 
 from hpopt.hpo_base import HpoBase, Trial
 from hpopt.hpo_base import TrialStatus
@@ -527,7 +527,8 @@ class HyperBand(HpoBase):
 
     def _get_random_hyper_parameter(self, num_samples: int):
         hp_configs = []
-        configurations = latin_hypercube_sample(len(self.search_space), num_samples)
+        latin_hypercube = LatinHypercube(len(self.search_space))
+        configurations = latin_hypercube.random(num_samples)
         for config in configurations:
             config_with_key = {key : config[idx] for idx, key in enumerate(self.search_space)}
             hp_configs.append(
