@@ -9,6 +9,8 @@ setup(
     long_description='A Python library of automatic hyper-parameters optimization',
     install_requires=[
         "bayesian-optimization >= 1.2.0",
+        "scipy>=1.8",
+        "torch"
     ],
 )
 
